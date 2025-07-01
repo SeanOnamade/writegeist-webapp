@@ -3,6 +3,7 @@ name: Build Desktop App
 on:
   push:
     branches: [ main, editor-yoopta ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
