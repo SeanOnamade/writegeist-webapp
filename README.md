@@ -20,6 +20,13 @@ A modern desktop application for writers to manage their books, chapters, and cr
 - **Project Markdown Editing**: Notion-style project hub with markdown editing for Ideas/Notes, Setting, Full Outline, and Characters
 - **Local Database**: SQLite storage with Drizzle ORM
 - **Cross-Platform**: Built with Electron for Windows, macOS, and Linux
+- **Rich Text Editor**: Powered by TipTap with real-time markdown shortcuts
+- **Project Management**: Organize chapters, characters, settings, and outlines
+- **Character & Location Tracking**: Automatically extract and organize story elements
+- **Chapter Editor**: Write and edit individual chapters with character/location sync
+- **Project now auto-saves with toast notifications & consistent markdown bullets**: Enhanced UX with visual save feedback and standardized asterisk bullet formatting
+- **Database Storage**: Local SQLite database for reliable data persistence
+- **Modern UI**: Dark theme with responsive design using Tailwind CSS
 
 ## Setup
 
@@ -190,4 +197,18 @@ pytest -q ai-service/tests
 ```
 
 The tests POST fixture chapters and assert that characters, locations, and summaries are extracted correctly.
-(Optionally wire this into GitHub Actions later.) 
+(Optionally wire this into GitHub Actions later.)
+
+### ✏️ Inline Novel Editor
+
+The Project page now uses the **Novel** (TipTap-based) editor for seamless inline editing.
+
+- **WYSIWYG Editing**: Rich text editor with markdown support
+- **Keyboard Shortcuts**: `⌘/Ctrl + B` for bold, `##` + space for H2, etc.
+- **Auto-save**: Content saves automatically every second to SQLite
+- **Markdown Compatible**: Seamless conversion between markdown and rich text
+- **Dark Theme**: Integrated styling that matches the app's dark theme
+- **Real-time Updates**: Listens for external document changes and updates editor content
+- **ProseMirror-based**: Built on the reliable ProseMirror editing framework
+
+The editor eliminates the need for separate edit/preview modes, providing a modern writing experience similar to Notion or other contemporary writing tools. 

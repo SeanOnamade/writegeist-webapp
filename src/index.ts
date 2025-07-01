@@ -139,18 +139,20 @@ app.on('ready', () => {
       try {
         // Get current markdown
         const result = await db.select().from(projectPages).limit(1);
-        if (result.length === 0) {
+        let markdown: string;
+        
+        if (result.length > 0) {
+          markdown = result[0].markdown;
+        } else {
           return { success: false, error: 'No project document found' };
         }
-
-        let markdown = result[0].markdown;
         
         // Find the Characters section
         const charactersMatch = markdown.match(/^## Characters\s*$/m);
         if (!charactersMatch) {
           return { success: false, error: 'Characters section not found' };
         }
-
+        
         // Get the position after the Characters heading
         const charactersIndex = charactersMatch.index + charactersMatch[0].length;
         
@@ -158,44 +160,52 @@ app.on('ready', () => {
         const afterCharacters = markdown.substring(charactersIndex);
         const existingCharacters = new Set<string>();
         
-        // Match existing bullet points
-        const bulletRegex = /^- (.+)$/gm;
+        // Match bullet points and extract character names
         let match;
+        const bulletRegex = /^[*-]\s+(.+)$/gm;
         while ((match = bulletRegex.exec(afterCharacters)) !== null) {
-          existingCharacters.add(match[1].trim());
+          // Extract character name (everything before first parenthesis, trimmed)
+          const name = match[1].split("(")[0].trim();
+          existingCharacters.add(name);
         }
-
-        // Filter out characters that already exist
-        const newCharacters = chars.filter((char: string) => !existingCharacters.has(char));
+        
+        // Filter out characters that already exist, with better name matching
+        const newCharacters = chars.filter((char: string) => {
+          const charName = char.split("(")[0].trim();
+          // Check if bullet already begins with "* " + name
+          const existingBulletPattern = `* ${charName}`;
+          return !Array.from(existingCharacters).some(existing => 
+            existing.toLowerCase() === charName.toLowerCase() ||
+            afterCharacters.includes(existingBulletPattern)
+          );
+        });
         
         if (newCharacters.length === 0) {
           return { success: true, message: 'No new characters to add' };
         }
-
+        
         // Find the end of the Characters section (next ## heading or end of document)
         const nextSectionMatch = afterCharacters.match(/\n## /);
         const insertPosition = nextSectionMatch 
-          ? charactersIndex + nextSectionMatch.index 
+          ? charactersIndex + nextSectionMatch.index
           : markdown.length;
-
-        // Insert new characters
-        const characterBullets = newCharacters.map((char: string) => `- ${char}`).join('\n');
+        
+        // Insert new characters using asterisk bullets
+        const characterBullets = newCharacters.map((char: string) => `* ${char}`).join('\n');
         const beforeInsert = markdown.substring(0, insertPosition);
         const afterInsert = markdown.substring(insertPosition);
         
-        // Add appropriate spacing
-        const needsNewline = !beforeInsert.endsWith('\n');
-        const spacing = needsNewline ? '\n\n' : '\n';
+        // Add newline before bullets if section doesn't end with newline
+        const separator = beforeInsert.endsWith('\n') ? '' : '\n';
+        const updatedMarkdown = beforeInsert + separator + characterBullets + '\n' + afterInsert;
         
-        const updatedMarkdown = beforeInsert + spacing + characterBullets + (afterInsert ? '\n' + afterInsert : '');
-
-        // Save updated markdown
+        // Save the updated markdown
         await db.update(projectPages).set({ markdown: updatedMarkdown }).where(eq(projectPages.id, 1));
         
         return { success: true, added: newCharacters };
       } catch (error) {
         console.error('Error appending characters:', error);
-        throw error;
+        return { success: false, error: 'Failed to append characters' };
       }
     });
 

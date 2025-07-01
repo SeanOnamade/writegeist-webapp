@@ -41,6 +41,13 @@ function findHeading(list: string[], keywords: string[]): string | undefined {
 function upsertBullets(md: string, heading: string, items: string[]): string {
   if (!items.length) return md;
   
+  // Filter locations: only include items with capital letters (proper nouns)
+  const filteredItems = heading.toLowerCase().includes('setting') || heading.toLowerCase().includes('location') || heading.toLowerCase().includes('place')
+    ? items.filter(item => /[A-Z]/.test(item))
+    : items;
+  
+  if (!filteredItems.length) return md;
+  
   // Ensure the heading exists
   if (!md.includes(`## ${heading}`)) {
     md += `\n\n## ${heading}\n`;
@@ -51,15 +58,17 @@ function upsertBullets(md: string, heading: string, items: string[]): string {
   const match = md.match(sectionRegex);
   let section = match ? match[0] : `## ${heading}`;
   
-  // Add items that don't already exist
-  items.forEach(item => {
-    const itemRegex = new RegExp(`^[*-]\\s+.*${escapeRegExp(item)}`, "im");
+  // Add items that don't already exist (using asterisk bullets)
+  const star = filteredItems.map(item => `* ${item}`);
+  star.forEach(bullet => {
+    const itemText = bullet.substring(2); // Remove "* " prefix
+    const itemRegex = new RegExp(`^[*-]\\s+.*${escapeRegExp(itemText)}`, "im");
     if (!itemRegex.test(section)) {
       // Add bullet point
       if (!section.endsWith('\n')) {
         section += '\n';
       }
-      section += `* ${item}\n`;
+      section += `${bullet}\n`;
     }
   });
   

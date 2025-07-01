@@ -1,0 +1,350 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import { StarterKit } from '@tiptap/starter-kit';
+import { Typography } from '@tiptap/extension-typography';
+import debounce from 'lodash.debounce';
+
+export interface NovelEditorProps {
+  initialMarkdown: string;
+  onChange: (markdown: string) => void;
+}
+
+export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorProps) {
+  const editorRef = useRef<any>(null);
+  const [showHelp, setShowHelp] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [timeUpdateTrigger, setTimeUpdateTrigger] = useState(0);
+  const isInternalUpdate = useRef(false);
+
+  // Convert markdown to HTML for initial content
+  const markdownToHtml = (markdown: string): string => {
+    if (!markdown) return '<p>Start writing... (Click ? for formatting help)</p>';
+    let html = markdown
+      .replace(/^### (.*$)/gim, '<h3>$1</h3>')  
+      .replace(/^## (.*$)/gim, '<h2>$1</h2>')
+      .replace(/^# (.*$)/gim, '<h1>$1</h1>')
+      .replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/gim, '<em>$1</em>')
+      .replace(/^> (.*$)/gim, '<blockquote>$1</blockquote>')
+      .replace(/^---$/gim, '<hr>')
+      .replace(/^[\*\-] (.*$)/gim, '<ul><li>$1</li></ul>')  // Handle both * and - bullets
+      .replace(/^\d+\. (.*$)/gim, '<ol><li>$1</li></ol>')
+      .split('\n\n')
+      .map(p => p.trim() ? (p.startsWith('<') ? p : `<p>${p}</p>`) : '')
+      .join('');
+    return html || '<p>Start writing... (Click ? for formatting help)</p>';
+  };
+
+  // Convert HTML back to markdown with consistent asterisk bullets
+  const htmlToMarkdown = (html: string): string => {
+    if (!html) return '';
+    return html
+      .replace(/<h1[^>]*>(.*?)<\/h1>/gim, '# $1\n\n')
+      .replace(/<h2[^>]*>(.*?)<\/h2>/gim, '## $1\n\n')
+      .replace(/<h3[^>]*>(.*?)<\/h3>/gim, '### $1\n\n')
+      .replace(/<strong[^>]*>(.*?)<\/strong>/gim, '**$1**')
+      .replace(/<em[^>]*>(.*?)<\/em>/gim, '*$1*')
+      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gim, '> $1\n\n')
+      .replace(/<hr[^>]*>/gim, '---\n\n')
+      .replace(/<ul[^>]*><li[^>]*>(.*?)<\/li><\/ul>/gim, '* $1\n')  // Use asterisk bullets
+      .replace(/<ol[^>]*><li[^>]*>(.*?)<\/li><\/ol>/gim, '1. $1\n')
+      .replace(/<p[^>]*>(.*?)<\/p>/gim, '$1\n\n')
+      .replace(/<br\s*\/?>/gim, '\n')
+      .replace(/&nbsp;/gim, ' ')
+      .trim();
+  };
+
+  // Create a debounced onChange handler (save every 30 seconds)
+  const debouncedOnChange = debounce(async (content: string) => {
+    setIsSaving(true);
+    try {
+      const markdown = htmlToMarkdown(content);
+      isInternalUpdate.current = true;
+      onChange(markdown);
+      setLastSaved(new Date());
+    } finally {
+      setIsSaving(false);
+      // Reset the flag after a short delay to allow parent state to update
+      setTimeout(() => {
+        isInternalUpdate.current = false;
+      }, 100);
+    }
+  }, 30000);
+
+  // Manual save function
+  const saveNow = async () => {
+    if (editor) {
+      setIsSaving(true);
+      try {
+        const html = editor.getHTML();
+        const markdown = htmlToMarkdown(html);
+        isInternalUpdate.current = true;
+        onChange(markdown);
+        setLastSaved(new Date());
+      } finally {
+        setIsSaving(false);
+        setTimeout(() => {
+          isInternalUpdate.current = false;
+        }, 100);
+      }
+    }
+  };
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        // Enable markdown shortcuts
+        heading: {
+          levels: [1, 2, 3],
+        },
+      }),
+      Typography,
+    ],
+    content: markdownToHtml(initialMarkdown || ''),
+    editorProps: {
+      attributes: {
+        class: 'prose prose-invert max-w-3xl mx-auto focus:outline-none min-h-[500px] p-4',
+      },
+      handleKeyDown: (view, event) => {
+        // Handle Ctrl+S for manual save
+        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+          event.preventDefault();
+          saveNow();
+          return true;
+        }
+        return false;
+      },
+    },
+    onUpdate: ({ editor }) => {
+      const html = editor.getHTML();
+      debouncedOnChange(html);
+    },
+  });
+
+  // Store editor reference and set initial save time if content exists
+  useEffect(() => {
+    if (editor) {
+      editorRef.current = editor;
+      // If there's initial content, mark it as "loaded" rather than showing no save status
+      if (initialMarkdown && initialMarkdown.trim() && !lastSaved) {
+        setLastSaved(new Date());
+      }
+    }
+  }, [editor, initialMarkdown, lastSaved]);
+
+  // Update content when initialMarkdown changes (for external updates only)
+  useEffect(() => {
+    if (editor && initialMarkdown && !isInternalUpdate.current) {
+      const html = markdownToHtml(initialMarkdown);
+      const currentHtml = editor.getHTML();
+      const currentMarkdown = htmlToMarkdown(currentHtml);
+      
+      // Only update if the content is actually different
+      if (initialMarkdown !== currentMarkdown) {
+        editor.commands.setContent(html, false);
+      }
+    }
+  }, [initialMarkdown, editor]);
+
+  // Close help overlay when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (showHelp && !(event.target as Element).closest('.help-overlay') && !(event.target as Element).closest('.help-button')) {
+        setShowHelp(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showHelp]);
+
+  // Update the "last saved" time display every minute
+  useEffect(() => {
+    if (!lastSaved) return;
+    
+    const interval = setInterval(() => {
+      // Force a re-render to update the time display
+      setTimeUpdateTrigger(prev => prev + 1);
+    }, 60000); // Update every minute
+
+    return () => clearInterval(interval);
+  }, [lastSaved]);
+
+  // Show loading state while editor initializes
+  if (!editor) {
+    return (
+      <div className="relative">
+        <div className="prose prose-invert max-w-3xl mx-auto focus:outline-none min-h-[500px] p-4 flex items-center justify-center">
+          <div className="text-neutral-400">Loading editor...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Format last saved time
+  const formatLastSaved = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins === 1) return '1 minute ago';
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours === 1) return '1 hour ago';
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    
+    return date.toLocaleString();
+  };
+
+  return (
+    <div className="relative">
+      {/* Saving Indicator */}
+      <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+        {isSaving && (
+          <div className="bg-blue-600 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1">
+            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            Saving...
+          </div>
+        )}
+        {!isSaving && lastSaved && (
+          <div className="bg-green-600 text-white px-2 py-1 rounded-md text-xs">
+            Saved {formatLastSaved(lastSaved)}
+          </div>
+        )}
+      </div>
+
+      {/* Bubble Menu for formatting selected text */}
+      {editor && (
+        <BubbleMenu
+          editor={editor}
+          tippyOptions={{ duration: 100 }}
+          className="bg-neutral-800 border border-neutral-600 rounded-lg p-2 shadow-lg flex gap-1"
+        >
+          <button
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('bold') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            <strong>B</strong>
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('italic') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            <em>I</em>
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('heading', { level: 2 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            H2
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('heading', { level: 3 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            H3
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('blockquote') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            "&gt;"
+          </button>
+          <button
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            className={`px-2 py-1 rounded text-sm ${
+              editor.isActive('bulletList') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            •
+          </button>
+        </BubbleMenu>
+      )}
+
+      {/* Help Button */}
+      <button
+        onClick={() => setShowHelp(!showHelp)}
+        className="help-button absolute top-2 right-2 z-10 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-md p-2 text-sm border border-neutral-600 transition-colors"
+        title="Formatting Help"
+      >
+        ?
+      </button>
+
+      {/* Help Overlay */}
+      {showHelp && (
+        <div className="help-overlay absolute top-12 right-2 z-20 bg-neutral-900 border border-neutral-600 rounded-lg p-4 shadow-lg max-w-sm">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="text-neutral-100 font-semibold">Formatting Guide</h3>
+            <button
+              onClick={() => setShowHelp(false)}
+              className="text-neutral-400 hover:text-white"
+            >
+              ×
+            </button>
+          </div>
+          
+          <div className="space-y-3 text-sm">
+            <div>
+              <h4 className="text-neutral-200 font-medium mb-1">Live Markdown Shortcuts</h4>
+              <div className="text-neutral-400 space-y-1">
+                <div># Space → Large Header</div>
+                <div>## Space → Medium Header</div>
+                <div>### Space → Small Header</div>
+                <div>**text** → Bold</div>
+                <div>*text* → Italic</div>
+                <div>&gt; Space → Blockquote</div>
+                <div>--- → Horizontal Rule</div>
+                <div>* Space → Bullet List</div>
+                <div>1. Space → Numbered List</div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-neutral-200 font-medium mb-1">Select Text + Bubble Menu</h4>
+              <div className="text-neutral-400 space-y-1">
+                <div>Select text to see formatting options</div>
+                <div>Click buttons to apply formatting</div>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-neutral-200 font-medium mb-1">Keyboard Shortcuts</h4>
+              <div className="text-neutral-400 space-y-1">
+                <div>Ctrl+B → Bold</div>
+                <div>Ctrl+I → Italic</div>
+                <div>Ctrl+S → Save Now</div>
+                <div>Enter twice → New paragraph</div>
+              </div>
+            </div>
+            
+            <div className="pt-2 border-t border-neutral-700">
+              <div className="text-neutral-500 text-xs">
+                Auto-saves every 30 seconds<br />
+                Blue indicator = Saving in progress<br />
+                Green indicator = Last saved time
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <EditorContent 
+        editor={editor} 
+        className="novel-editor-content"
+      />
+    </div>
+  );
+} 

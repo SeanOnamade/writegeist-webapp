@@ -1,16 +1,27 @@
-import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import remarkSlug from 'remark-slug';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Edit3, Save, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import NovelEditor from '../components/NovelEditor';
+import { useToast } from '@/hooks/use-toast';
+
+// Simple Badge component
+const Badge: React.FC<{ children: React.ReactNode; variant?: 'default' | 'secondary' }> = ({ 
+  children, 
+  variant = 'default' 
+}) => (
+  <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ${
+    variant === 'secondary' 
+      ? 'bg-neutral-700 text-neutral-300' 
+      : 'bg-blue-600 text-white'
+  }`}>
+    {children}
+  </span>
+);
 
 export const ProjectPage: React.FC = () => {
   const [markdown, setMarkdown] = useState('');
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const editorRef = useRef<any>(null);
+  const { toast } = useToast();
 
   const defaultMarkdown = `# My Project
 
@@ -36,6 +47,23 @@ export const ProjectPage: React.FC = () => {
     return () => window.removeEventListener("project-doc-updated", onUpdate);
   }, []);
 
+  // Listen for project-doc-updated event and refresh editor content
+  useEffect(() => {
+    const handleDocUpdate = async () => {
+      try {
+        const newMarkdown = await window.api.getProjectDoc();
+        if (newMarkdown && newMarkdown !== markdown) {
+          setMarkdown(newMarkdown);
+        }
+      } catch (error) {
+        console.error('Failed to refresh project document:', error);
+      }
+    };
+    
+    window.addEventListener("project-doc-updated", handleDocUpdate);
+    return () => window.removeEventListener("project-doc-updated", handleDocUpdate);
+  }, [markdown]);
+
   const loadProjectDoc = async () => {
     try {
       setIsLoading(true);
@@ -52,27 +80,34 @@ export const ProjectPage: React.FC = () => {
     }
   };
 
-  const handleEdit = () => {
-    setEditContent(markdown);
-    setIsEditing(true);
-  };
-
-  const handleSave = async () => {
+  const saveDoc = async (newMarkdown: string) => {
+    setSaving(true);
     try {
-      await window.api.saveProjectDoc(editContent);
-      setMarkdown(editContent);
-      setIsEditing(false);
+      await window.api.saveProjectDoc(newMarkdown);
+      setMarkdown(newMarkdown);
       
       // Trigger a custom event to notify Layout component to refresh sections
       window.dispatchEvent(new CustomEvent('projectUpdated'));
+      
+      toast({
+        title: "Saved!",
+        description: "Project document has been saved successfully.",
+        variant: "default",
+      });
     } catch (error) {
       console.error('Failed to save project document:', error);
+      toast({
+        title: "Save failed",
+        description: "Failed to save project document. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setEditContent('');
-    setIsEditing(false);
+  const handleSave = async (newMarkdown: string) => {
+    await saveDoc(newMarkdown);
   };
 
   if (isLoading) {
@@ -95,68 +130,18 @@ export const ProjectPage: React.FC = () => {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-neutral-100">Project</h1>
-            <p className="text-neutral-400 text-sm">Manage your project overview and notes</p>
+            <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3">
+              Project
+              {saving && <Badge>Saving…</Badge>}
+            </h1>
+            <p className="text-neutral-400 text-sm">Manage your project overview and notes with inline editing</p>
           </div>
-          {!isEditing ? (
-            <Button
-              onClick={handleEdit}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              <Edit3 className="h-4 w-4" />
-              Edit
-            </Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button
-                onClick={handleSave}
-                variant="default"
-                size="sm"
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" />
-                Save
-              </Button>
-              <Button
-                onClick={handleCancel}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <X className="h-4 w-4" />
-                Cancel
-              </Button>
-            </div>
-          )}
         </div>
 
-        {isEditing ? (
-          <div className="space-y-4">
-            <Textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="min-h-[600px] font-mono text-sm bg-neutral-900 border-neutral-700 text-neutral-100"
-              placeholder="Write your project markdown here..."
-            />
-          </div>
-        ) : (
-          <div className="prose prose-invert prose-neutral max-w-none">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm, remarkSlug]}
-              components={{
-                h2: ({ children, ...props }) => (
-                  <h2 {...props} className="scroll-mt-6">
-                    {children}
-                  </h2>
-                ),
-              }}
-            >
-              {markdown}
-            </ReactMarkdown>
-          </div>
-        )}
+        <NovelEditor 
+          initialMarkdown={markdown}
+          onChange={handleSave}
+        />
       </div>
     </div>
   );
