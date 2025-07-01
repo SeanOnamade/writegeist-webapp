@@ -8,7 +8,35 @@ from chapter_ingest_graph import run_chapter_ingest
 
 from pathlib import Path
 from dotenv import load_dotenv
+import json
+
+# Load .env file (for development)
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+# Load user config file (for production)
+def load_user_config():
+    """Load configuration from user's AppData directory"""
+    try:
+        config_dir = Path.home() / "AppData" / "Roaming" / "Writegeist"
+        config_file = config_dir / "config.json"
+        
+        if config_file.exists():
+            print(f"Loading config from: {config_file}")
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+                
+            # Set environment variables from config
+            for key, value in config.items():
+                if value:  # Only set if value is not empty
+                    os.environ[key] = str(value)
+                    print(f"Loaded config: {key}")
+        else:
+            print(f"No config file found at: {config_file}")
+    except Exception as e:
+        print(f"Error loading user config: {e}")
+
+# Load user configuration
+load_user_config()
 
 app = FastAPI()
 
