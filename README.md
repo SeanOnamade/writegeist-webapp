@@ -2,17 +2,21 @@
 
 A modern desktop application for writers to manage their books, chapters, and creative projects with AI-powered analysis.
 
-## Features
+## ✨ Features
 
-- **Chapter Management**: Create and manage your book chapters
+- **Chapter Management**: Create, edit, and organize your chapters with full-text search
+- **AI-Powered Analysis**: Automated extraction of characters, locations, and narrative elements using GPT-4o
+- **Enhanced Extraction**: Extraction now includes character traits, detailed settings, chapter summaries, and literary tropes
+- **Refined Outputs**: Extraction now outputs refined summaries, tropes, and filters locations
+- **Smart H2 Sync**: Dynamic markdown synchronization with intelligent content organization
+- **Live Updates**: Real-time project document updates when chapters are created
+- **Writing Dashboard**: Comprehensive overview of your writing progress
+- **Project Hub**: Centralized document management with persistent UI state
 - **Smart Character Tracking**: Automatically extract and sync character names across chapters and project overview
 - **Project Hub**: Notion-style markdown editing for project notes and outlines
 - **Auto-scroll Navigation**: Jump to specific sections in your project document
-- **Live Updates**: Project page auto-refreshes when new characters are added
-- **Smart H2 Sync**: Each new chapter automatically updates any matching H2 heading ('Characters', 'Setting', 'Full Outline') or creates it if missing
 - **Dark Theme**: Professional dark interface optimized for writing
 - **Dark, Modern UI**: Built with Tailwind CSS and shadcn/ui components
-- **AI-Powered Analysis**: OpenAI GPT-4o powered extraction of characters, locations, and POV
 - **Project Markdown Editing**: Notion-style project hub with markdown editing for Ideas/Notes, Setting, Full Outline, and Characters
 - **Local Database**: SQLite storage with Drizzle ORM
 - **Cross-Platform**: Built with Electron for Windows, macOS, and Linux

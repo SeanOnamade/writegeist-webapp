@@ -70,13 +70,15 @@ export const ChapterEditor: React.FC<ChapterEditorProps> = ({
         
                   // Dynamic H2-aware sync to project document
           try {
-            const summary = data.text.slice(0, 120) + "...";
+            const summary = data.metadata?.summary || "Chapter summary unavailable.";
             const syncPayload: SyncPayload = {
               title: data.title,
               text: data.text,
               characters: data.characters || [],
               locations: data.locations || [],
-              summary
+              summary: summary,
+              tropes: data.metadata?.tropes || [],
+              metadata: data.metadata
             };
             await window.api.syncChapterDynamic(syncPayload);
           // Dispatch event to refresh project page

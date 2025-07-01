@@ -31,7 +31,7 @@ def get_llm():
 
 
 def extract_characters_node(state: ChapterState) -> ChapterState:
-    """Extract character names using OpenAI GPT-4o."""
+    """Extract character names with traits using OpenAI GPT-4o."""
     print("[LangGraph] node extract_characters", flush=True)
     log_entry = f"[LangGraph] node extract_characters - Processing chapter: {state['title'][:50]}..."
     
@@ -39,14 +39,17 @@ def extract_characters_node(state: ChapterState) -> ChapterState:
         llm = get_llm()
         
         prompt = f"""
-        Extract all named characters from this chapter text. Return only a JSON list of character names.
+        You are a literary analyst. Extract EVERY distinct character in the passage.
+        • For each, include ONE concise trait or role in parentheses.
+        • Return a pure JSON array of strings, e.g.
+          ["Kane (amnesiac swordsman)", "Tal (telekinetic leader)"]
         
         Chapter Title: {state['title']}
         
         Text: {state['text'][:2000]}...
         
-        Return format: ["Character1", "Character2", ...]
-        Only include proper names of people, not titles or descriptions.
+        Return format: ["Character1 (trait/role)", "Character2 (trait/role)", ...]
+        Only include proper names of people with their most defining characteristic.
         """
         
         response = llm.invoke(prompt)
@@ -61,7 +64,7 @@ def extract_characters_node(state: ChapterState) -> ChapterState:
             matches = re.findall(r'"([^"]+)"', content)
             characters = matches[:10]  # Limit to 10 characters
         
-        log_entry += f" - Found {len(characters)} characters: {characters[:3]}..."
+        log_entry += f" - Found {len(characters)} characters with traits: {characters[:3]}..."
         print(f"[LangGraph] extract_characters found: {characters}", flush=True)
             
         return {
@@ -83,7 +86,7 @@ def extract_characters_node(state: ChapterState) -> ChapterState:
 
 
 def extract_locations_node(state: ChapterState) -> ChapterState:
-    """Extract location names using OpenAI GPT-4o."""
+    """Extract location names using enhanced OpenAI GPT-4o analysis with post-filtering."""
     print("[LangGraph] node extract_locations", flush=True)
     log_entry = f"[LangGraph] node extract_locations - Processing chapter: {state['title'][:50]}..."
     
@@ -91,15 +94,16 @@ def extract_locations_node(state: ChapterState) -> ChapterState:
         llm = get_llm()
         
         prompt = f"""
-        Extract all named locations from this chapter text. Return only a JSON list of location names.
+        Identify every place, geographic reference, vessel, or room that serves as SETTING.
+        Return JSON array of distinct strings (max 8).
         
         Chapter Title: {state['title']}
         
         Text: {state['text'][:2000]}...
         
+        Include: cities, countries, buildings, rooms, ships, vehicles, geographic features.
+        Focus on specific named places that serve as story settings.
         Return format: ["Location1", "Location2", ...]
-        Include cities, countries, buildings, rooms, geographic features, etc.
-        Only include specific named places, not generic descriptions.
         """
         
         response = llm.invoke(prompt)
@@ -107,19 +111,26 @@ def extract_locations_node(state: ChapterState) -> ChapterState:
         # Parse the response content
         content = str(response.content).strip()
         if content.startswith('[') and content.endswith(']'):
-            locations = json.loads(content)
+            raw_locations = json.loads(content)
         else:
             # Fallback: extract from content if not properly formatted
             import re
             matches = re.findall(r'"([^"]+)"', content)
-            locations = matches[:5]  # Limit to 5 locations
+            raw_locations = matches[:8]
         
-        log_entry += f" - Found {len(locations)} locations: {locations[:3]}..."
-        print(f"[LangGraph] extract_locations found: {locations}", flush=True)
+        # Post-filter locations for quality
+        clean_locations = [
+            l for l in raw_locations
+            if any(c.isupper() for c in l)            # must contain a capital
+            and not (len(l.split()) > 3 and " " not in l)  # drop weird long tokens
+        ][:8]
+        
+        log_entry += f" - Found {len(raw_locations)} raw, filtered to {len(clean_locations)} clean settings: {clean_locations[:3]}..."
+        print(f"[LangGraph] extract_locations found: {clean_locations}", flush=True)
             
         return {
             **state,
-            "locations": locations,
+            "locations": clean_locations,
             "log": state.get("log", []) + [log_entry]
         }
     except Exception as e:
@@ -136,7 +147,7 @@ def extract_locations_node(state: ChapterState) -> ChapterState:
 
 
 def extract_pov_node(state: ChapterState) -> ChapterState:
-    """Extract point of view using OpenAI GPT-4o."""
+    """Extract point of view and tense using OpenAI GPT-4o."""
     print("[LangGraph] node extract_pov", flush=True)
     log_entry = f"[LangGraph] node extract_pov - Processing chapter: {state['title'][:50]}..."
     
@@ -144,37 +155,61 @@ def extract_pov_node(state: ChapterState) -> ChapterState:
         llm = get_llm()
         
         prompt = f"""
-        Analyze the point of view (POV) of this chapter text. Return only a JSON list with the POV type.
+        Determine the narrative point-of-view and tense.
+        Respond with ONE of:
+          "First Person, Past"
+          "First Person, Present"
+          "Third Person Limited"
+          "Third Person Omniscient"
+          "Other"
         
         Chapter Title: {state['title']}
         
         Text: {state['text'][:1500]}...
         
-        Return format: ["First Person"] or ["Second Person"] or ["Third Person Limited"] or ["Third Person Omniscient"]
-        
         Guidelines:
-        - First Person: Uses "I", "me", "my" from narrator's perspective
-        - Second Person: Uses "you" addressing the reader
-        - Third Person Limited: Uses "he/she" with one character's perspective
-        - Third Person Omniscient: Uses "he/she" with multiple characters' thoughts
+        - First Person, Past: "I walked", "I had seen"
+        - First Person, Present: "I walk", "I see"
+        - Third Person Limited: One character's perspective using "he/she"
+        - Third Person Omniscient: Multiple characters' thoughts using "he/she"
+        - Other: Second person, mixed tenses, or unusual perspectives
+        
+        Return only one of the exact phrases above.
         """
         
         response = llm.invoke(prompt)
         
         # Parse the response content
         content = str(response.content).strip()
-        if content.startswith('[') and content.endswith(']'):
-            pov = json.loads(content)
+        
+        # Validate response is one of the expected formats
+        valid_povs = [
+            "First Person, Past",
+            "First Person, Present", 
+            "Third Person Limited",
+            "Third Person Omniscient",
+            "Other"
+        ]
+        
+        if content in valid_povs:
+            pov = [content]
         else:
-            # Fallback: simple analysis
+            # Fallback: analyze text patterns
             text_lower = state["text"].lower()
             first_person = text_lower.count(" i ") + text_lower.count("my") + text_lower.count("me")
             third_person = text_lower.count(" he ") + text_lower.count(" she ")
             
             if first_person > third_person:
-                pov = ["First Person"]
+                # Check for present vs past tense
+                past_indicators = text_lower.count("was") + text_lower.count("had") + text_lower.count("did")
+                present_indicators = text_lower.count("am") + text_lower.count("is") + text_lower.count("do")
+                
+                if present_indicators > past_indicators:
+                    pov = ["First Person, Present"]
+                else:
+                    pov = ["First Person, Past"]
             else:
-                pov = ["Third Person"]
+                pov = ["Third Person Limited"]
         
         log_entry += f" - Detected POV: {pov[0] if pov else 'Unknown'}"
         print(f"[LangGraph] extract_pov found: {pov}", flush=True)
@@ -193,9 +228,9 @@ def extract_pov_node(state: ChapterState) -> ChapterState:
         third_person = text_lower.count(" he ") + text_lower.count(" she ")
         
         if first_person > third_person:
-            pov = ["First Person"]
+            pov = ["First Person, Past"]
         else:
-            pov = ["Third Person"]
+            pov = ["Third Person Limited"]
         
         log_entry += f" - ERROR: {error_msg} - Fallback POV: {pov[0] if pov else 'Unknown'}"
         return {
@@ -206,47 +241,79 @@ def extract_pov_node(state: ChapterState) -> ChapterState:
 
 
 def generate_metadata_node(state: ChapterState) -> ChapterState:
-    """Generate enhanced metadata using OpenAI analysis."""
+    """Generate enhanced metadata with dedicated prompts for summary, sentiment, and tropes."""
     print("[LangGraph] node generate_metadata", flush=True)
     log_entry = f"[LangGraph] node generate_metadata - Processing chapter: {state['title'][:50]}..."
     
     try:
         llm = get_llm()
         
-        prompt = f"""
-        Analyze this chapter and return metadata in JSON format:
+        # 1. Generate summary with dedicated prompt
+        summary_prompt = f"""
+        Summarise the passage in ≤ 40 words, 3rd-person, no spoilers.
+        Return the raw sentence only.
         
-        Chapter Title: {state['title']}
-        Text: {state['text'][:1000]}...
-        
-        Return JSON with:
-        - sentiment: "positive", "negative", or "neutral"
-        - tone: brief description
-        - reading_time_minutes: estimated time
-        - complexity: "simple", "moderate", or "complex"
-        
-        Format: {{"sentiment": "...", "tone": "...", "reading_time_minutes": X, "complexity": "..."}}
+        Text: {state['text'][:1500]}...
         """
         
-        response = llm.invoke(prompt)
+        summary_response = llm.invoke(summary_prompt)
+        summary = str(summary_response.content).strip().strip('"').strip("'")
         
-        # Parse AI response
-        content = str(response.content).strip()
-        if content.startswith('{') and content.endswith('}'):
-            ai_metadata = json.loads(content)
+        # 2. Generate sentiment with specific prompt
+        sentiment_prompt = f"""
+        Return ONE word for the story's overall mood:
+          tense, hopeful, tragic, comedic, neutral.
+        
+        Text: {state['text'][:1000]}...
+        """
+        
+        sentiment_response = llm.invoke(sentiment_prompt)
+        sentiment = str(sentiment_response.content).strip().lower()
+        
+        # Validate sentiment is one of expected values
+        valid_sentiments = ["tense", "hopeful", "tragic", "comedic", "neutral"]
+        if sentiment not in valid_sentiments:
+            sentiment = "neutral"
+        
+        # 3. Generate tropes with dedicated prompt
+        tropes_prompt = f"""
+        Name 2-3 literary tropes present
+        (e.g. 'heist gone wrong', 'mentor figure', 'time manipulation').
+        Return JSON array.
+        
+        Text: {state['text'][:1500]}...
+        
+        Format: ["trope1", "trope2", "trope3"]
+        """
+        
+        tropes_response = llm.invoke(tropes_prompt)
+        tropes_content = str(tropes_response.content).strip()
+        
+        # Parse tropes JSON
+        if tropes_content.startswith('[') and tropes_content.endswith(']'):
+            tropes = json.loads(tropes_content)
         else:
-            ai_metadata = {"sentiment": "neutral", "tone": "unknown"}
+            # Fallback: extract from content if not properly formatted
+            import re
+            matches = re.findall(r'"([^"]+)"', tropes_content)
+            tropes = matches[:3]
         
-        # Combine with basic stats
+        # Calculate word count and reading time
+        word_count = len(state["text"].split())
+        reading_time = max(1, word_count // 200)  # ~200 WPM
+        
+        # Combine all metadata
         metadata = {
-            "word_count": len(state["text"].split()),
+            "word_count": word_count,
             "character_count": len(state["characters"]),
             "location_count": len(state["locations"]),
-            "reading_time_minutes": max(1, len(state["text"].split()) // 200),  # ~200 WPM
-            **ai_metadata
+            "reading_time_minutes": reading_time,
+            "sentiment": sentiment,
+            "summary": summary,
+            "tropes": tropes
         }
         
-        log_entry += f" - Generated metadata: {len(metadata)} fields, sentiment: {metadata.get('sentiment', 'unknown')}"
+        log_entry += f" - Generated metadata: sentiment={sentiment}, tropes={len(tropes)}, summary='{summary[:30]}...'"
         print(f"[LangGraph] generate_metadata created: {metadata}", flush=True)
         
         return {
@@ -258,16 +325,21 @@ def generate_metadata_node(state: ChapterState) -> ChapterState:
         # Fallback to basic metadata if OpenAI fails
         error_msg = f"Metadata generation failed: {e}"
         print(error_msg, flush=True)
+        
+        word_count = len(state["text"].split())
+        fallback_summary = state["text"][:120] + "..." if len(state["text"]) > 120 else state["text"]
+        
         metadata = {
-            "word_count": len(state["text"].split()),
+            "word_count": word_count,
             "character_count": len(state["characters"]),
             "location_count": len(state["locations"]),
-            "reading_time_minutes": max(1, len(state["text"].split()) // 200),
+            "reading_time_minutes": max(1, word_count // 200),
             "sentiment": "neutral",
-            "tone": "unknown"
+            "summary": fallback_summary,
+            "tropes": []
         }
         
-        log_entry += f" - ERROR: {error_msg} - Using basic metadata"
+        log_entry += f" - ERROR: {error_msg} - Using fallback metadata"
         return {
             **state,
             "metadata": metadata,

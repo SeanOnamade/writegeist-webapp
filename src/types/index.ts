@@ -14,6 +14,16 @@ export interface SyncPayload {
   characters: string[];
   locations: string[];
   summary: string;
+  tropes?: string[];
+  metadata?: {
+    word_count: number;
+    character_count: number;
+    location_count: number;
+    reading_time_minutes: number;
+    sentiment: string;
+    summary: string;
+    tropes: string[];
+  };
 }
 
 // Extend the global Window interface to include our API
