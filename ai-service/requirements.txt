@@ -3,4 +3,7 @@ uvicorn
 openai
 python-dotenv
 langchain-openai
-langgraph 
+langgraph
+pydantic
+pytest
+requests 

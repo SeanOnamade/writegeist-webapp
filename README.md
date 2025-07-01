@@ -174,4 +174,20 @@ Chapter editing and management features:
 - Unified ChapterEditor component for both creating and editing chapters
 - Edit buttons on all chapters in the Chapters page
 - Seamless UI transitions between viewing and editing modes
-- Database update operations with proper error handling 
+- Database update operations with proper error handling
+
+## 🧪 Testing & CI
+
+Writegeist ships with lightweight smoke tests for the AI-extraction pipeline.
+
+```bash
+# In one terminal start the backend
+cd ai-service && . .venv/Scripts/activate
+uvicorn main:app --port 8000 --reload
+
+# In another terminal
+pytest -q ai-service/tests
+```
+
+The tests POST fixture chapters and assert that characters, locations, and summaries are extracted correctly.
+(Optionally wire this into GitHub Actions later.) 
