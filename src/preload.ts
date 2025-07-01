@@ -44,4 +44,10 @@ contextBridge.exposeInMainWorld('api', {
   syncChapterDynamic: async (result: any) => {
     return await ipcRenderer.invoke('sync-chapter-dynamic', result);
   },
+  getConfig: async () => {
+    return await ipcRenderer.invoke('get-config');
+  },
+  saveConfig: async (config: any) => {
+    return await ipcRenderer.invoke('save-config', config);
+  },
 });

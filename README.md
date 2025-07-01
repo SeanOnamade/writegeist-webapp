@@ -2,6 +2,27 @@
 
 A modern desktop application for writers to manage their books, chapters, and creative projects with AI-powered analysis.
 
+## 🚀 Production Ready
+
+**Writegeist Desktop is now fully deployable!** The application packages into a single-click installer that includes:
+
+- **Bundled FastAPI Backend**: No Python installation required for end users
+- **Configuration Management**: User-friendly settings page for API keys
+- **SQLite Database**: Local data storage with full persistence
+- **Cross-Platform Installer**: Currently supports Windows with Squirrel
+
+### For End Users
+
+📥 **Download**: Get the latest installer from [Releases](../../releases)  
+📖 **Setup Guide**: See [USER_GUIDE.md](./USER_GUIDE.md) for installation and usage instructions  
+⚙️ **Requirements**: Just your OpenAI API key - everything else is included!
+
+### For Developers
+
+🔧 **Build**: `npm run make` creates the installer  
+🤖 **CI/CD**: GitHub Actions automatically builds on every push  
+📦 **Architecture**: Electron frontend + bundled FastAPI backend
+
 ## ✨ Features
 
 - **Chapter Management**: Create, edit, and organize your chapters with full-text search
