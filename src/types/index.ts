@@ -42,6 +42,8 @@ declare global {
       syncChapterDynamic: (result: SyncPayload) => Promise<{ success: boolean }>;
       getConfig: () => Promise<{ OPENAI_API_KEY: string; PORT: number }>;
       saveConfig: (config: { OPENAI_API_KEY: string; PORT: number }) => Promise<{ success: boolean }>;
+      registerGlobalSaveHandler: (handler: () => void) => void;
+      unregisterGlobalSaveHandler: () => void;
     };
   }
 } 

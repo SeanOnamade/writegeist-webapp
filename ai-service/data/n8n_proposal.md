@@ -1,5 +1,5 @@
 ### Characters / (root)
 
-* Knox (killer with a thrill for violence)
-* Uriah (horrified observer)
-* Zara (rogue healer who distrusts Lucian)
+* Sarah Chen (protagonist) - A data analyst who discovers she can decode people's memories
+* Marcus Rivera (antagonist) - Corporate executive hiding dangerous secrets
+* Dr. Elena Vasquez (mentor) - Neuroscientist studying memory manipulation

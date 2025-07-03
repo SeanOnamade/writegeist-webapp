@@ -68,13 +68,22 @@ const startApiBackend = () => {
   const config = loadConfig();
   const exePath = app.isPackaged
     ? path.join(process.resourcesPath, 'writegeist-api.exe')
-    : path.join(__dirname, '..', 'resources', 'writegeist-api.exe');
+    : path.join(process.cwd(), 'resources', 'writegeist-api.exe');
 
-  console.log('Starting API backend from:', exePath);
+  // In development, use batch script that activates venv and runs uvicorn
+  const usePythonSource = !app.isPackaged;
+  const batchScriptPath = path.join(process.cwd(), 'ai-service', 'start_api.bat');
+  const command = usePythonSource ? batchScriptPath : exePath;
+  const args = usePythonSource ? [] : [];
+  const cwd = usePythonSource ? undefined : undefined;
+
+  console.log('Starting API backend from:', usePythonSource ? 'batch script (venv)' : exePath);
   
   try {
-    apiProcess = spawn(exePath, [], { 
-      stdio: 'ignore',
+    apiProcess = spawn(command, args, { 
+      stdio: 'inherit',
+      cwd: cwd,
+      shell: true,
       env: { 
         ...process.env, 
         WG_PORT: config.PORT || '8000',
@@ -127,6 +136,51 @@ const createWindow = (): void => {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+
+  // Start database monitoring
+  const dbPath = path.join(process.cwd(), 'writegeist.db');
+  startDbMonitoring(dbPath, mainWindow);
+};
+
+// Database change monitoring
+let dbWatcher: fs.FSWatcher | null = null;
+let lastDbModified: number = 0;
+
+const startDbMonitoring = (dbPath: string, mainWindow: BrowserWindow) => {
+  try {
+    // Stop existing watcher
+    if (dbWatcher) {
+      dbWatcher.close();
+    }
+
+    // Get initial modification time
+    const stats = fs.statSync(dbPath);
+    lastDbModified = stats.mtimeMs;
+
+    // Watch for file changes
+    dbWatcher = fs.watch(dbPath, (eventType) => {
+      if (eventType === 'change') {
+        try {
+          const newStats = fs.statSync(dbPath);
+          if (newStats.mtimeMs > lastDbModified) {
+            lastDbModified = newStats.mtimeMs;
+            
+            // Notify renderer about database changes
+            mainWindow.webContents.send('db-updated', {
+              table: 'unknown', // We can't determine specific table from file watch
+              updatedAt: new Date().toISOString()
+            });
+          }
+        } catch (error) {
+          console.warn('Error checking database modification:', error);
+        }
+      }
+    });
+
+    console.log('Database monitoring started');
+  } catch (error) {
+    console.warn('Failed to start database monitoring:', error);
+  }
 };
 
 // This method will be called when Electron has finished
@@ -396,6 +450,10 @@ app.on('ready', () => {
         throw error;
       }
     });
+
+    // Start database monitoring after initialization
+    const dbPath = path.join(process.cwd(), 'writegeist.db');
+    // We'll start monitoring once the window is created
   }).catch(console.error);
   
   createWindow();

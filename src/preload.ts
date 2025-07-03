@@ -3,6 +3,21 @@
 
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Global save manager for keyboard shortcuts
+let globalSaveHandler: (() => void) | null = null;
+
+// Global keyboard handler for Ctrl/Cmd+S
+window.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (globalSaveHandler) {
+      globalSaveHandler();
+    }
+  }
+}, { capture: true });
+
 contextBridge.exposeInMainWorld('api', {
   echo: async (text: string) => {
     const res = await fetch('http://127.0.0.1:8000/echo', {
@@ -49,5 +64,11 @@ contextBridge.exposeInMainWorld('api', {
   },
   saveConfig: async (config: any) => {
     return await ipcRenderer.invoke('save-config', config);
+  },
+  registerGlobalSaveHandler: (handler: () => void) => {
+    globalSaveHandler = handler;
+  },
+  unregisterGlobalSaveHandler: () => {
+    globalSaveHandler = null;
   },
 });

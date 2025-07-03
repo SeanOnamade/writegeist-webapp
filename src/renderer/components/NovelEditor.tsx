@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Typography } from '@tiptap/extension-typography';
-import debounce from 'lodash.debounce';
 
 export interface NovelEditorProps {
   initialMarkdown: string;
@@ -12,9 +11,6 @@ export interface NovelEditorProps {
 export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorProps) {
   const editorRef = useRef<any>(null);
   const [showHelp, setShowHelp] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const [timeUpdateTrigger, setTimeUpdateTrigger] = useState(0);
   const isInternalUpdate = useRef(false);
 
   // Convert markdown to HTML for initial content
@@ -55,42 +51,6 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
       .trim();
   };
 
-  // Create a debounced onChange handler (save every 30 seconds)
-  const debouncedOnChange = debounce(async (content: string) => {
-    setIsSaving(true);
-    try {
-      const markdown = htmlToMarkdown(content);
-      isInternalUpdate.current = true;
-      onChange(markdown);
-      setLastSaved(new Date());
-    } finally {
-      setIsSaving(false);
-      // Reset the flag after a short delay to allow parent state to update
-      setTimeout(() => {
-        isInternalUpdate.current = false;
-      }, 100);
-    }
-  }, 30000);
-
-  // Manual save function
-  const saveNow = async () => {
-    if (editor) {
-      setIsSaving(true);
-      try {
-        const html = editor.getHTML();
-        const markdown = htmlToMarkdown(html);
-        isInternalUpdate.current = true;
-        onChange(markdown);
-        setLastSaved(new Date());
-      } finally {
-        setIsSaving(false);
-        setTimeout(() => {
-          isInternalUpdate.current = false;
-        }, 100);
-      }
-    }
-  };
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -106,32 +66,20 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
       attributes: {
         class: 'prose prose-invert max-w-3xl mx-auto focus:outline-none min-h-[500px] p-4',
       },
-      handleKeyDown: (view, event) => {
-        // Handle Ctrl+S for manual save
-        if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-          event.preventDefault();
-          saveNow();
-          return true;
-        }
-        return false;
-      },
     },
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
-      debouncedOnChange(html);
+      const markdown = htmlToMarkdown(html);
+      onChange(markdown);
     },
   });
 
-  // Store editor reference and set initial save time if content exists
+  // Store editor reference
   useEffect(() => {
     if (editor) {
       editorRef.current = editor;
-      // If there's initial content, mark it as "loaded" rather than showing no save status
-      if (initialMarkdown && initialMarkdown.trim() && !lastSaved) {
-        setLastSaved(new Date());
-      }
     }
-  }, [editor, initialMarkdown, lastSaved]);
+  }, [editor]);
 
   // Update content when initialMarkdown changes (for external updates only)
   useEffect(() => {
@@ -159,18 +107,6 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showHelp]);
 
-  // Update the "last saved" time display every minute
-  useEffect(() => {
-    if (!lastSaved) return;
-    
-    const interval = setInterval(() => {
-      // Force a re-render to update the time display
-      setTimeUpdateTrigger(prev => prev + 1);
-    }, 60000); // Update every minute
-
-    return () => clearInterval(interval);
-  }, [lastSaved]);
-
   // Show loading state while editor initializes
   if (!editor) {
     return (
@@ -182,40 +118,8 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
     );
   }
 
-  // Format last saved time
-  const formatLastSaved = (date: Date) => {
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    
-    if (diffMins < 1) return 'just now';
-    if (diffMins === 1) return '1 minute ago';
-    if (diffMins < 60) return `${diffMins} minutes ago`;
-    
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours === 1) return '1 hour ago';
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    
-    return date.toLocaleString();
-  };
-
   return (
     <div className="relative">
-      {/* Saving Indicator */}
-      <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
-        {isSaving && (
-          <div className="bg-blue-600 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1">
-            <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            Saving...
-          </div>
-        )}
-        {!isSaving && lastSaved && (
-          <div className="bg-green-600 text-white px-2 py-1 rounded-md text-xs">
-            Saved {formatLastSaved(lastSaved)}
-          </div>
-        )}
-      </div>
-
       {/* Bubble Menu for formatting selected text */}
       {editor && (
         <BubbleMenu

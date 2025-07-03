@@ -2,14 +2,21 @@ version: "3.8"
 
 services:
   fastapi:
-    build:
-      context: ./ai-service           # <-- your repo folder
-    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    image: python:3.11-slim
+    working_dir: /srv/app
+    command: >
+      bash -c "
+        pip install --no-cache-dir -r requirements.txt &&
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      "
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    ports:                    # <- align with 'environment', 4 spaces
+    ports:
       - "5000:8000"
     volumes:
+      # Mount the entire ai-service directory as the app directory
+      - ./ai-service:/srv/app
+      # Mount the database file from the project root
       - ./writegeist.db:/srv/app/writegeist.db
     restart: unless-stopped
     labels:
