@@ -190,6 +190,34 @@ def create_default_project_doc(db_path):
         return default_markdown
 
 
-H2 = re.compile(r"^\s*##\s+(.+)$", flags=re.M)
 
-# ── place near the other helpers (imports stay as-is) --------------
+def extract_section(markdown: str, section_name: str) -> str:
+    """Extract section content between ## headers"""
+    lines = markdown.split('\n')
+    section_start = None
+    section_end = len(lines)
+    
+    # Find the start of our section
+    for i, line in enumerate(lines):
+        if re.match(rf'^\s*##\s+{re.escape(section_name)}\s*$', line, re.I):
+            section_start = i + 1
+            break
+    
+    if section_start is None:
+        return ""
+    
+    # Find the end (next ## header)
+    for i in range(section_start, len(lines)):
+        if re.match(r'^\s*##\s+', lines[i]):
+            section_end = i
+            break
+    
+    # Extract and clean the content
+    content_lines = lines[section_start:section_end]
+    # Remove empty lines at start and end
+    while content_lines and not content_lines[0].strip():
+        content_lines.pop(0)
+    while content_lines and not content_lines[-1].strip():
+        content_lines.pop()
+    
+    return '\n'.join(content_lines)
