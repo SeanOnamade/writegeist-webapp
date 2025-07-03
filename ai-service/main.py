@@ -117,17 +117,21 @@ def get_project_section(section_name: str):
 def accept_patch(patch: Patch):
     """
     n8n sends a complete markdown block that should replace the
-    current block (or be queued for manual approval).
-    
-    For now we just write it to a temporary file so you can see it worked.
-    In the future, this could trigger a diff/approval workflow.
+    current block and update the project database.
     """
     try:
-        # Create data directory if it doesn't exist
+        # Load current project markdown
+        current_markdown = load_markdown()
+        
+        # Apply the patch to the specified section
+        updated_markdown = apply_patch_to_section(current_markdown, patch.section, patch.replace)
+        
+        # Save the updated markdown back to the database
+        save_markdown_to_database(updated_markdown)
+        
+        # Also write to temporary file for debugging
         data_dir = Path(__file__).parent / "data"
         data_dir.mkdir(exist_ok=True)
-        
-        # Write the patch to a temporary file for now
         outfile = data_dir / "n8n_proposal.md"
         outfile.write_text(
             f"### {patch.section} / {patch.h2 or '(root)'}\n\n{patch.replace}",
@@ -135,9 +139,9 @@ def accept_patch(patch: Patch):
         )
         
         # Log the received patch
-        print(f"Received n8n patch for section '{patch.section}': {len(patch.replace)} characters")
+        print(f"Applied n8n patch for section '{patch.section}': {len(patch.replace)} characters")
         
-        return {"status": "queued", "section": patch.section, "file": str(outfile)}
+        return {"status": "applied", "section": patch.section, "file": str(outfile)}
     except Exception as e:
         raise HTTPException(
             status_code=500, 
@@ -259,3 +263,82 @@ def extract_section(markdown: str, section_name: str) -> str:
         content_lines.pop()
     
     return '\n'.join(content_lines)
+
+
+def apply_patch_to_section(markdown: str, section_name: str, new_content: str) -> str:
+    """Replace the content of a specific section in the markdown"""
+    lines = markdown.split('\n')
+    section_header_index = None
+    section_start = 0
+    section_end = len(lines)
+    
+    # Find the section header
+    for i, line in enumerate(lines):
+        if re.match(rf'^\s*##\s+{re.escape(section_name)}\s*$', line, re.I):
+            section_header_index = i
+            section_start = i + 1
+            break
+    
+    if section_header_index is None:
+        # Section doesn't exist, add it at the end
+        if lines and lines[-1].strip():
+            lines.append('')  # Add blank line before new section
+        lines.append(f'## {section_name}')
+        lines.append('')
+        lines.extend(new_content.split('\n'))
+        return '\n'.join(lines)
+    
+    # Find the end of the section (next ## header)
+    for i in range(section_start, len(lines)):
+        if re.match(r'^\s*##\s+', lines[i]):
+            section_end = i
+            break
+    
+    # Replace the section content
+    new_lines = lines[:section_start]
+    
+    # Add the new content
+    if new_content.strip():
+        new_lines.extend(new_content.split('\n'))
+    
+    # Add remaining lines after the section
+    if section_end < len(lines):
+        new_lines.extend(lines[section_end:])
+    
+    return '\n'.join(new_lines)
+
+
+def save_markdown_to_database(markdown: str):
+    """Save the updated markdown to the database"""
+    try:
+        # Use the same database file as the frontend (in project root)
+        db_path = Path(__file__).parent.parent / "writegeist.db"
+        
+        # Connect to database and update the project markdown
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        
+        # Create tables if they don't exist (same as frontend)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_pages (
+                id INTEGER PRIMARY KEY,
+                markdown TEXT NOT NULL
+            )
+        """
+        )
+        
+        # Update the project markdown
+        cursor.execute(
+            "INSERT OR REPLACE INTO project_pages (id, markdown) VALUES (1, ?)",
+            (markdown,),
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        print("Successfully saved updated markdown to database")
+        
+    except Exception as e:
+        print(f"Error saving to database: {e}")
+        raise

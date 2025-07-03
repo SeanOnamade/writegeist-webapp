@@ -9,7 +9,8 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "eslint --ext .ts,.tsx ."
+    "lint": "eslint --ext .ts,.tsx .",
+    "sync-db": "powershell -ExecutionPolicy Bypass -File sync-to-vm.ps1"
   },
   "keywords": [],
   "author": {

@@ -71,4 +71,10 @@ contextBridge.exposeInMainWorld('api', {
   unregisterGlobalSaveHandler: () => {
     globalSaveHandler = null;
   },
+  syncToVM: async () => {
+    return await ipcRenderer.invoke('sync-to-vm');
+  },
+  syncFromVM: async () => {
+    return await ipcRenderer.invoke('sync-from-vm');
+  },
 });

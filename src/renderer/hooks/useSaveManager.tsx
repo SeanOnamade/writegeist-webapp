@@ -14,6 +14,11 @@ export interface SaveManager extends SaveState {
   restoreDraft: () => string | null;
   clearDraft: () => void;
   hasDraft: () => boolean;
+  autoSyncEnabled: boolean;
+  setAutoSyncEnabled: (enabled: boolean) => void;
+  syncToVM: () => Promise<void>;
+  lastVMSyncAt: Date | null;
+  vmSyncInProgress: boolean;
 }
 
 const SaveManagerContext = createContext<SaveManager | null>(null);
@@ -49,6 +54,10 @@ export function SaveManagerProvider({
   const draftBackupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const draftKey = `${draftKeyPrefix}-${window.location.pathname}`;
+
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true); // Default enabled
+  const [lastVMSyncAt, setLastVMSyncAt] = useState<Date | null>(null);
+  const [vmSyncInProgress, setVMSyncInProgress] = useState(false);
 
   // Save draft to localStorage every 2 seconds
   const saveDraftToStorage = useCallback(() => {
@@ -105,6 +114,23 @@ export function SaveManagerProvider({
     localStorage.removeItem(draftKey);
   }, [draftKey]);
 
+  const syncToVM = useCallback(async () => {
+    if (vmSyncInProgress) return;
+    
+    setVMSyncInProgress(true);
+    try {
+      // Call the sync script via IPC
+      await (window.api as any).syncToVM();
+      setLastVMSyncAt(new Date());
+      console.log('VM sync completed successfully');
+    } catch (error) {
+      console.error('VM sync failed:', error);
+      // Don't throw - VM sync failure shouldn't break the save process
+    } finally {
+      setVMSyncInProgress(false);
+    }
+  }, [vmSyncInProgress]);
+
   // Perform the actual save operation
   const performSave = useCallback(async (content: string): Promise<void> => {
     setSaveState(prev => ({ ...prev, isSaving: true, lastError: null }));
@@ -120,6 +146,14 @@ export function SaveManagerProvider({
         lastError: null
       }));
       clearDraft();
+      
+      // Auto-sync to VM after successful save (if enabled)
+      if (autoSyncEnabled) {
+        // Run VM sync in background without waiting
+        syncToVM().catch(error => {
+          console.error('Auto VM sync failed:', error);
+        });
+      }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown save error';
       setSaveState(prev => ({
@@ -129,7 +163,7 @@ export function SaveManagerProvider({
       }));
       throw error;
     }
-  }, [onSave, clearDraft]);
+  }, [onSave, clearDraft, autoSyncEnabled, syncToVM]);
 
   // Manual save function
   const saveNow = useCallback(async (): Promise<void> => {
@@ -197,7 +231,7 @@ export function SaveManagerProvider({
       lastSavedContentRef.current = initialContent;
       currentContentRef.current = initialContent;
     }
-  }, [initialContent]);
+      }, [initialContent]);
 
   const saveManager: SaveManager = {
     ...saveState,
@@ -206,7 +240,12 @@ export function SaveManagerProvider({
     setContent,
     restoreDraft,
     clearDraft,
-    hasDraft
+    hasDraft,
+    autoSyncEnabled,
+    setAutoSyncEnabled,
+    syncToVM,
+    lastVMSyncAt,
+    vmSyncInProgress,
   };
 
   // Expose SaveManager to global scope for debugging
