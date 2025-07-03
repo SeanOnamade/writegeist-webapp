@@ -63,6 +63,12 @@ class ChapterIngestReq(BaseModel):
     text: str
 
 
+class Patch(BaseModel):
+    section: str                # e.g. "Characters"
+    h2: str | None = None       # optional sub-header
+    replace: str                # the full markdown block
+
+
 # Remove regex helper functions - now using OpenAI via LangGraph
 
 
@@ -107,6 +113,38 @@ def get_project_section(section_name: str):
         )
 
 
+@app.post("/n8n/proposal", status_code=202)
+def accept_patch(patch: Patch):
+    """
+    n8n sends a complete markdown block that should replace the
+    current block (or be queued for manual approval).
+    
+    For now we just write it to a temporary file so you can see it worked.
+    In the future, this could trigger a diff/approval workflow.
+    """
+    try:
+        # Create data directory if it doesn't exist
+        data_dir = Path(__file__).parent / "data"
+        data_dir.mkdir(exist_ok=True)
+        
+        # Write the patch to a temporary file for now
+        outfile = data_dir / "n8n_proposal.md"
+        outfile.write_text(
+            f"### {patch.section} / {patch.h2 or '(root)'}\n\n{patch.replace}",
+            encoding="utf-8",
+        )
+        
+        # Log the received patch
+        print(f"Received n8n patch for section '{patch.section}': {len(patch.replace)} characters")
+        
+        return {"status": "queued", "section": patch.section, "file": str(outfile)}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Failed to process patch: {str(e)}"}
+        )
+
+
 # Helper functions
 def load_markdown():
     """Load the project markdown from the SQLite database (same as frontend)"""
@@ -140,7 +178,7 @@ def load_markdown():
         # Fallback to default content
         return """# My Project
 
-## Ideas/Notes
+## Ideas-Notes
 
 ## Setting
 
@@ -153,7 +191,7 @@ def create_default_project_doc(db_path):
     """Create default project document in database"""
     default_markdown = """# My Project
 
-## Ideas/Notes
+## Ideas-Notes
 
 ## Setting
 
