@@ -190,40 +190,21 @@ def create_default_project_doc(db_path):
         return default_markdown
 
 
-def extract_section(markdown_content: str, section_name: str):
+H2 = re.compile(r"^\s*##\s+(.+)$", flags=re.M)
+
+def extract_section(markdown: str, section_name: str) -> str:
     """
-    Extract the block under the matching ## <section_name> header (case-insensitive)
-    until the next ## or EOF using regex.
+    Return everything between '## <section>' and the next ## heading.
+    Strips the heading itself and a leading blank line, if present.
     """
-    # Create regex pattern to match the section header (case-insensitive)
-    pattern = rf"^## {re.escape(section_name)}\s*$"
+    bodies  = re.split(r"^\s*##\s+", markdown, flags=re.M)
+    titles  = H2.findall(markdown)
 
-    # Find all ## headers and their positions
-    lines = markdown_content.split("\n")
-    section_start = None
+    for title, body in zip(titles, bodies[1:]):
+        if title.strip().lower() == section_name.lower():
+            lines = body.splitlines()
+            if lines and not lines[0].strip():      # drop first blank line
+                lines = lines[1:]
+            return "\n".join(lines).rstrip()
 
-    for i, line in enumerate(lines):
-        if re.match(pattern, line.strip(), re.IGNORECASE):
-            section_start = i
-            break
-
-    if section_start is None:
-        return ""  # Section not found
-
-    # Find the end of the section (next ## header or EOF)
-    section_end = len(lines)
-    for i in range(section_start + 1, len(lines)):
-        if lines[i].strip().startswith("## "):
-            section_end = i
-            break
-
-    # Extract the section content (excluding the header)
-    section_lines = lines[section_start + 1 : section_end]
-
-    # Remove leading/trailing empty lines
-    while section_lines and not section_lines[0].strip():
-        section_lines.pop(0)
-    while section_lines and not section_lines[-1].strip():
-        section_lines.pop()
-
-    return "\n".join(section_lines)
+    return ""          # section not found
