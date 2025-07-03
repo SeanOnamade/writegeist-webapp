@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  fastapi:
+    build:
+      context: ./ai-service           # <-- your repo folder
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:                    # <- align with 'environment', 4 spaces
+      - "5000:8000"
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fastapi.rule=Host(`python-fastapi-u50080.vm.elestio.app`)"
+      - "traefik.http.routers.fastapi.entrypoints=websecure"
+      - "traefik.http.services.fastapi.loadbalancer.server.port=8000"
+
+  mongo:
+    image: mongo:6
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:
