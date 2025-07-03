@@ -150,7 +150,7 @@ def load_markdown():
     """Load the project markdown from the SQLite database (same as frontend)"""
     try:
         # Use the same database file as the frontend
-        db_path = Path(__file__).parent.parent / "writegeist.db"
+        db_path = Path(__file__).parent / "writegeist.db"
 
         # If database doesn't exist, create it with default content
         if not db_path.exists():
