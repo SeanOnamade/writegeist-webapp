@@ -213,6 +213,31 @@ export function SaveManagerProvider({
     clearDraft();
   }, [clearDraft]);
 
+  // Listen for global save requests (e.g., before navigation)
+  useEffect(() => {
+    const handleGlobalSaveRequest = async (event: CustomEvent) => {
+      try {
+        // Only save if we have unsaved changes
+        if (currentContentRef.current !== lastSavedContentRef.current) {
+          await performSave(currentContentRef.current);
+        }
+      } catch (error) {
+        console.error('Global save failed:', error);
+      } finally {
+        // Always resolve to prevent hanging navigation
+        if (event.detail?.resolve) {
+          event.detail.resolve();
+        }
+      }
+    };
+
+    window.addEventListener('global-save-request', handleGlobalSaveRequest as EventListener);
+    
+    return () => {
+      window.removeEventListener('global-save-request', handleGlobalSaveRequest as EventListener);
+    };
+  }, [performSave]);
+
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {

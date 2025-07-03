@@ -40,8 +40,8 @@ export default function SaveStatusIndicator() {
   }, [lastSavedAt]);
 
   // Determine status and styling
-  let statusColor = 'bg-gray-500';
-  let statusText = 'Unknown';
+  let statusColor = 'bg-green-500';
+  let statusText = 'Saved';
   let showSpinner = false;
 
   if (isSaving) {
@@ -63,7 +63,7 @@ export default function SaveStatusIndicator() {
   const handleMouseLeave = () => setShowTooltip(false);
 
   return (
-    <div className="fixed top-4 right-4 z-50">
+    <div className="fixed top-8 right-8 z-50">
       <div 
         className="relative"
         onMouseEnter={handleMouseEnter}

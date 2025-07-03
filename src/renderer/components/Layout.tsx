@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
@@ -25,9 +25,41 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [projectSections, setProjectSections] = useState<Array<{label: string, slug: string}>>([]);
+  const isNavigatingRef = useRef(false);
 
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Auto-save before navigation
+  const triggerGlobalSave = async (): Promise<void> => {
+    return new Promise((resolve) => {
+      // Dispatch a global save event that SaveManagers can listen to
+      const saveEvent = new CustomEvent('global-save-request', {
+        detail: { resolve }
+      });
+      window.dispatchEvent(saveEvent);
+      
+      // Fallback timeout to prevent hanging
+      setTimeout(resolve, 2000);
+    });
+  };
+
+  // Enhanced navigation function with auto-save
+  const navigateWithSave = async (path: string) => {
+    if (isNavigatingRef.current) return;
+    
+    try {
+      isNavigatingRef.current = true;
+      await triggerGlobalSave();
+      navigate(path);
+    } catch (error) {
+      console.error('Save before navigation failed:', error);
+      // Navigate anyway to prevent user being stuck
+      navigate(path);
+    } finally {
+      isNavigatingRef.current = false;
+    }
+  };
 
   // Default sections - will be overridden by dynamic parsing
   const defaultProjectSections = [
@@ -55,6 +87,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('projectUpdated', handleProjectUpdate);
     return () => window.removeEventListener('projectUpdated', handleProjectUpdate);
   }, [location.pathname]);
+
+  // Auto-save when user closes app or navigates away
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      // Trigger sync save - don't wait for it since we can't delay unload
+      triggerGlobalSave().catch(console.error);
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
 
   const loadProjectSections = async () => {
     try {
@@ -84,14 +127,14 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const handleLogoClick = () => {
     const lastProjectId = localStorage.getItem('lastProjectId');
     if (lastProjectId) {
-      navigate('/project');
+      navigateWithSave('/project');
     } else {
-      navigate('/');
+      navigateWithSave('/');
     }
   };
 
-  const handleProjectSectionClick = (slug: string) => {
-    navigate('/project');
+  const handleProjectSectionClick = async (slug: string) => {
+    await navigateWithSave('/project');
     // Small delay to ensure navigation completes before scrolling
     setTimeout(() => {
       const element = document.getElementById(slug);
@@ -109,7 +152,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="p-6 border-b border-neutral-900">
           <button
             onClick={handleLogoClick}
-            className="flex items-center gap-2 text-xl font-bold text-neutral-100 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-xl font-bold text-neutral-100 hover:text-white transition-all duration-200 hover:scale-105"
           >
             <FileText className="h-6 w-6" />
             Writegeist
@@ -122,12 +165,12 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="w-full">
             <div 
               className={clsx(
-                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
+                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-all duration-200 hover:scale-105",
                 isActive('/project') 
                   ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700' 
                   : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
               )}
-              onClick={() => navigate('/project')}
+              onClick={() => navigateWithSave('/project')}
             >
               <Book className="h-4 w-4" />
               <span>Project</span>
@@ -162,7 +205,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
             )}
-            onClick={() => navigate('/chapters')}
+            onClick={() => navigateWithSave('/chapters')}
           >
             <Library className="h-4 w-4" />
             Chapters
@@ -177,7 +220,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
             )}
-            onClick={() => navigate('/insert-chapter')}
+            onClick={() => navigateWithSave('/insert-chapter')}
           >
             <Plus className="h-4 w-4" />
             Insert Chapter
@@ -192,7 +235,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
             )}
-            onClick={() => navigate('/idea-inbox')}
+            onClick={() => navigateWithSave('/idea-inbox')}
           >
             <Lightbulb className="h-4 w-4" />
             Idea Inbox
@@ -207,7 +250,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
             )}
-            onClick={() => navigate('/settings')}
+            onClick={() => navigateWithSave('/settings')}
           >
             <Settings className="h-4 w-4" />
             Settings

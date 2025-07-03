@@ -11,7 +11,20 @@ export interface NovelEditorProps {
 export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorProps) {
   const editorRef = useRef<any>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [wordCount, setWordCount] = useState(0);
   const isInternalUpdate = useRef(false);
+
+  // Count words in markdown text
+  const countWords = (text: string): number => {
+    if (!text) return 0;
+    // Remove markdown formatting and count words
+    const plainText = text
+      .replace(/[#*>\-\[\]]/g, '') // Remove markdown symbols
+      .replace(/\n+/g, ' ') // Replace newlines with spaces
+      .trim();
+    if (!plainText) return 0;
+    return plainText.split(/\s+/).filter(word => word.length > 0).length;
+  };
 
   // Convert markdown to HTML for initial content
   const markdownToHtml = (markdown: string): string => {
@@ -70,14 +83,19 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
     onUpdate: ({ editor }) => {
       const html = editor.getHTML();
       const markdown = htmlToMarkdown(html);
+      setWordCount(countWords(markdown));
       onChange(markdown);
     },
   });
 
-  // Store editor reference
+  // Store editor reference and auto-focus
   useEffect(() => {
     if (editor) {
       editorRef.current = editor;
+      // Auto-focus the editor when it's ready
+      setTimeout(() => {
+        editor.commands.focus();
+      }, 100);
     }
   }, [editor]);
 
@@ -93,6 +111,8 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
         editor.commands.setContent(html, false);
       }
     }
+    // Update word count when initial markdown changes
+    setWordCount(countWords(initialMarkdown || ''));
   }, [initialMarkdown, editor]);
 
   // Close help overlay when clicking outside
@@ -129,48 +149,48 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
         >
           <button
             onClick={() => editor.chain().focus().toggleBold().run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('bold') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('bold') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             <strong>B</strong>
           </button>
           <button
             onClick={() => editor.chain().focus().toggleItalic().run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('italic') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('italic') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             <em>I</em>
           </button>
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('heading', { level: 2 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('heading', { level: 2 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             H2
           </button>
           <button
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('heading', { level: 3 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('heading', { level: 3 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             H3
           </button>
           <button
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('blockquote') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('blockquote') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             "&gt;"
           </button>
           <button
             onClick={() => editor.chain().focus().toggleBulletList().run()}
-            className={`px-2 py-1 rounded text-sm ${
-              editor.isActive('bulletList') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700'
+            className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
+              editor.isActive('bulletList') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
             }`}
           >
             •
@@ -181,10 +201,10 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
       {/* Help Button */}
       <button
         onClick={() => setShowHelp(!showHelp)}
-        className="help-button absolute top-2 right-2 z-10 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-md p-2 text-sm border border-neutral-600 transition-colors"
+        className="help-button absolute top-2 right-2 z-10 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white rounded-md px-3 py-2 text-sm border border-neutral-600 transition-all duration-200 hover:scale-105 hover:shadow-lg"
         title="Formatting Help"
       >
-        ?
+        Formatting Guide
       </button>
 
       {/* Help Overlay */}
@@ -194,7 +214,7 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
             <h3 className="text-neutral-100 font-semibold">Formatting Guide</h3>
             <button
               onClick={() => setShowHelp(false)}
-              className="text-neutral-400 hover:text-white"
+              className="text-neutral-400 hover:text-white transition-all duration-200 hover:scale-110 hover:rotate-90"
             >
               ×
             </button>
@@ -249,6 +269,11 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
         editor={editor} 
         className="novel-editor-content"
       />
+      
+      {/* Word Count Display */}
+      <div className="fixed bottom-4 left-4 text-xs text-neutral-500 bg-neutral-900/90 backdrop-blur-sm px-3 py-2 rounded-full shadow-lg border border-neutral-700 z-30">
+        {wordCount} {wordCount === 1 ? 'word' : 'words'}
+      </div>
     </div>
   );
 } 
