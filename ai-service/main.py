@@ -192,19 +192,13 @@ def create_default_project_doc(db_path):
 
 H2 = re.compile(r"^\s*##\s+(.+)$", flags=re.M)
 
+# ── place near the other helpers (imports stay as-is) --------------
 def extract_section(markdown: str, section_name: str) -> str:
     """
-    Return everything between '## <section>' and the next ## heading.
-    Strips the heading itself and a leading blank line, if present.
+    Grab everything between '## <section_name>' and the next H2 or EOF.
+    Works even if there are extra blank lines, HTML <li>, etc.
     """
-    bodies  = re.split(r"^\s*##\s+", markdown, flags=re.M)
-    titles  = H2.findall(markdown)
-
-    for title, body in zip(titles, bodies[1:]):
-        if title.strip().lower() == section_name.lower():
-            lines = body.splitlines()
-            if lines and not lines[0].strip():      # drop first blank line
-                lines = lines[1:]
-            return "\n".join(lines).rstrip()
-
-    return ""          # section not found
+    # build a regex that is literal for the heading text
+    pattern = rf"(?im)^##\s+{re.escape(section_name)}\s*\n(.*?)(?=^\s*##\s|\Z)"
+    match   = re.search(pattern, markdown, flags=re.S)
+    return match.group(1).strip() if match else ""
