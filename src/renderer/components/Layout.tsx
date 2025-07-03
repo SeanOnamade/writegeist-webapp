@@ -37,7 +37,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   // Default sections - will be overridden by dynamic parsing
   const defaultProjectSections = [
-    { label: 'Ideas/Notes', slug: 'ideasnotes' },
+    { label: 'Ideas-Notes', slug: 'ideasnotes' },
     { label: 'Setting', slug: 'setting' },
     { label: 'Full Outline', slug: 'full-outline' },
     { label: 'Characters', slug: 'characters' },

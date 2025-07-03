@@ -25,7 +25,7 @@ export const ProjectPage: React.FC = () => {
 
   const defaultMarkdown = `# My Project
 
-## Ideas/Notes
+## Ideas-Notes
 
 ## Setting
 

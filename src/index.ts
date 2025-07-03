@@ -189,7 +189,7 @@ app.on('ready', () => {
           // Insert default markdown if none exists
           const defaultMarkdown = `# My Project
 
-## Ideas/Notes
+## Ideas-Notes
 
 ## Setting
 
@@ -371,7 +371,7 @@ app.on('ready', () => {
           // Create default markdown if none exists
           markdown = `# My Project
 
-## Ideas/Notes
+## Ideas-Notes
 
 ## Setting
 
