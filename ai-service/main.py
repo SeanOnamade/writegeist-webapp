@@ -193,12 +193,3 @@ def create_default_project_doc(db_path):
 H2 = re.compile(r"^\s*##\s+(.+)$", flags=re.M)
 
 # ── place near the other helpers (imports stay as-is) --------------
-def extract_section(markdown: str, section_name: str) -> str:
-    """
-    Grab everything between '## <section_name>' and the next H2 or EOF.
-    Works even if there are extra blank lines, HTML <li>, etc.
-    """
-    # build a regex that is literal for the heading text
-    pattern = rf"(?im)^##\s+{re.escape(section_name)}\s*\n(.*?)(?=^\s*##\s|\Z)"
-    match   = re.search(pattern, markdown, flags=re.S)
-    return match.group(1).strip() if match else ""
