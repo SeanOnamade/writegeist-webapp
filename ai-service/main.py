@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import re
+import sqlite3
 
 # LangGraph integration - loads environment variables
 from chapter_ingest_graph import run_chapter_ingest
@@ -108,15 +109,85 @@ def get_project_section(section_name: str):
 
 # Helper functions
 def load_markdown():
-    """Load the entire project markdown from data/project.md"""
-    project_md_path = Path(__file__).parent / "data" / "project.md"
+    """Load the project markdown from the SQLite database (same as frontend)"""
+    try:
+        # Use the same database file as the frontend
+        db_path = Path(__file__).parent.parent / "writegeist.db"
 
-    # Create folder and file if they don't exist
-    project_md_path.parent.mkdir(exist_ok=True)
-    if not project_md_path.exists():
-        project_md_path.write_text("# Project\n\nThis is your project file.\n")
+        # If database doesn't exist, create it with default content
+        if not db_path.exists():
+            return create_default_project_doc(db_path)
 
-    return project_md_path.read_text(encoding="utf-8")
+        # Connect to database and get the project markdown
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Get the project markdown from project_pages table
+        cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
+        result = cursor.fetchone()
+
+        if result:
+            markdown_content = result[0]
+        else:
+            # No project document exists, create default
+            markdown_content = create_default_project_doc(db_path)
+
+        conn.close()
+        return markdown_content
+
+    except Exception as e:
+        print(f"Error loading from database: {e}")
+        # Fallback to default content
+        return """# My Project
+
+## Ideas/Notes
+
+## Setting
+
+## Full Outline
+
+## Characters"""
+
+
+def create_default_project_doc(db_path):
+    """Create default project document in database"""
+    default_markdown = """# My Project
+
+## Ideas/Notes
+
+## Setting
+
+## Full Outline
+
+## Characters"""
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+
+        # Create tables if they don't exist (same as frontend)
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS project_pages (
+                id INTEGER PRIMARY KEY,
+                markdown TEXT NOT NULL
+            )
+        """
+        )
+
+        # Insert default project document
+        cursor.execute(
+            "INSERT OR REPLACE INTO project_pages (id, markdown) VALUES (1, ?)",
+            (default_markdown,),
+        )
+
+        conn.commit()
+        conn.close()
+        return default_markdown
+
+    except Exception as e:
+        print(f"Error creating default project: {e}")
+        return default_markdown
 
 
 def extract_section(markdown_content: str, section_name: str):

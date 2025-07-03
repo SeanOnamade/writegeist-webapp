@@ -106,6 +106,7 @@ Before running the AI service, you need to configure your OpenAI API key:
 The AI service runs at http://127.0.0.1:8000 with endpoints:
 - POST `/echo` - Echo service
 - POST `/ingest_chapter` - OpenAI GPT-4o powered chapter analysis and metadata extraction
+- GET `/project/section/{section_name}` - Extract specific sections from project markdown file
 
 ## File Structure
 
