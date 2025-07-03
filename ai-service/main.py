@@ -228,40 +228,34 @@ def create_default_project_doc(db_path):
         return default_markdown
 
 
-def extract_section(markdown_content: str, section_name: str):
-    """
-    Extract the block under the matching ## <section_name> header (case-insensitive)
-    until the next ## or EOF using regex.
-    """
-    # Create regex pattern to match the section header (case-insensitive)
-    pattern = rf"^## {re.escape(section_name)}\s*$"
 
-    # Find all ## headers and their positions
-    lines = markdown_content.split("\n")
+def extract_section(markdown: str, section_name: str) -> str:
+    """Extract section content between ## headers"""
+    lines = markdown.split('\n')
     section_start = None
-
-    for i, line in enumerate(lines):
-        if re.match(pattern, line.strip(), re.IGNORECASE):
-            section_start = i
-            break
-
-    if section_start is None:
-        return ""  # Section not found
-
-    # Find the end of the section (next ## header or EOF)
     section_end = len(lines)
-    for i in range(section_start + 1, len(lines)):
-        if lines[i].strip().startswith("## "):
+    
+    # Find the start of our section
+    for i, line in enumerate(lines):
+        if re.match(rf'^\s*##\s+{re.escape(section_name)}\s*$', line, re.I):
+            section_start = i + 1
+            break
+    
+    if section_start is None:
+        return ""
+    
+    # Find the end (next ## header)
+    for i in range(section_start, len(lines)):
+        if re.match(r'^\s*##\s+', lines[i]):
             section_end = i
             break
-
-    # Extract the section content (excluding the header)
-    section_lines = lines[section_start + 1 : section_end]
-
-    # Remove leading/trailing empty lines
-    while section_lines and not section_lines[0].strip():
-        section_lines.pop(0)
-    while section_lines and not section_lines[-1].strip():
-        section_lines.pop()
-
-    return "\n".join(section_lines)
+    
+    # Extract and clean the content
+    content_lines = lines[section_start:section_end]
+    # Remove empty lines at start and end
+    while content_lines and not content_lines[0].strip():
+        content_lines.pop(0)
+    while content_lines and not content_lines[-1].strip():
+        content_lines.pop()
+    
+    return '\n'.join(content_lines)
