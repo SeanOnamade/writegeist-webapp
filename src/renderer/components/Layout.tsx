@@ -1,12 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion';
 import { 
   Home, 
   Book, 
@@ -21,7 +15,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import slugify from 'slugify';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
+
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -31,7 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [projectSections, setProjectSections] = useState<Array<{label: string, slug: string}>>([]);
-  const [open, setOpen] = useLocalStorage("sidebar-project-open", "project");
+
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -124,45 +118,40 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1">
-          {/* Project Section with Accordion */}
-          <Accordion type="single" value={open} onValueChange={setOpen} collapsible className="w-full">
-            <AccordionItem value="project" className="border-none">
-              <AccordionTrigger 
-                className={clsx(
-                  "flex items-center justify-between w-full px-3 py-2 text-left rounded-md transition-colors hover:no-underline",
-                  isActive('/project') 
-                    ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700' 
-                    : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
-                )}
-              >
-                <div className="flex items-center gap-3">
-                  <Book className="h-4 w-4" />
-                  <span>Project</span>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pb-0 pt-1">
-                <div className="pl-7 space-y-1">
-                  {projectSections.map((section) => (
-                    <Button
-                      key={section.slug}
-                      variant="ghost"
-                      size="sm"
-                      className={clsx(
-                        "w-full justify-start gap-3 h-8 text-sm",
-                        isActive('/project')
-                          ? 'text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800'
-                          : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
-                      )}
-                      onClick={() => handleProjectSectionClick(section.slug)}
-                    >
-                      <div className="h-2 w-2 rounded-full bg-neutral-600"></div>
-                      {section.label}
-                    </Button>
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+          {/* Project Section - Always Expanded */}
+          <div className="w-full">
+            <div 
+              className={clsx(
+                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
+                isActive('/project') 
+                  ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700' 
+                  : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
+              )}
+              onClick={() => navigate('/project')}
+            >
+              <Book className="h-4 w-4" />
+              <span>Project</span>
+            </div>
+            <div className="pl-7 mt-1 space-y-1">
+              {projectSections.map((section) => (
+                <Button
+                  key={section.slug}
+                  variant="ghost"
+                  size="sm"
+                  className={clsx(
+                    "w-full justify-start gap-3 h-8 text-sm",
+                    isActive('/project')
+                      ? 'text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800'
+                      : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
+                  )}
+                  onClick={() => handleProjectSectionClick(section.slug)}
+                >
+                  <div className="h-2 w-2 rounded-full bg-neutral-600"></div>
+                  {section.label}
+                </Button>
+              ))}
+            </div>
+          </div>
 
           {/* Chapters */}
           <Button

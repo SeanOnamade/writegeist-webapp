@@ -186,7 +186,7 @@ export const IdeaInbox: React.FC = () => {
               ref={textareaRef}
               value={ideaText}
               onChange={(e) => setIdeaText(e.target.value)}
-              placeholder="Describe your idea... e.g., 'What if Knox had a secret weakness to silver?' or 'The city should have floating districts connected by bridges'"
+              placeholder="Describe your idea in under 20 words... e.g., 'What if Knox had a secret weakness to silver?' or 'The city should have floating districts connected by bridges'"
               className="min-h-[100px] resize-none bg-neutral-700 border-neutral-600 text-neutral-100 placeholder:text-neutral-400"
               disabled={isSubmitting}
             />
