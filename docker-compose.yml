@@ -9,6 +9,8 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
     ports:                    # <- align with 'environment', 4 spaces
       - "5000:8000"
+    volumes:
+      - ./writegeist.db:/srv/app/writegeist.db
     restart: unless-stopped
     labels:
       - "traefik.enable=true"
