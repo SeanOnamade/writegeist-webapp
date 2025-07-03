@@ -6,7 +6,7 @@ import DraftRestoreNotification from './DraftRestoreNotification';
 import DatabaseUpdateNotification from './DatabaseUpdateNotification';
 
 interface EnhancedNovelEditorProps extends NovelEditorProps {
-  // Additional props can be added here
+  onSave?: (content: string) => Promise<void>;
 }
 
 // Internal component that uses SaveManager
@@ -100,12 +100,17 @@ function EditorWithSaveManager({
 export default function EnhancedNovelEditor({ 
   initialMarkdown, 
   onChange, 
+  onSave,
   ...props 
 }: EnhancedNovelEditorProps) {
-  // Save function that calls the original onChange prop
+  // Save function that uses onSave if provided, otherwise calls onChange
   const handleSave = useCallback(async (content: string) => {
-    onChange(content);
-  }, [onChange]);
+    if (onSave) {
+      await onSave(content);
+    } else {
+      onChange(content);
+    }
+  }, [onChange, onSave]);
 
   return (
     <SaveManagerProvider 

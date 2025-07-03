@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import NovelEditor from '../components/NovelEditor';
+import EnhancedNovelEditor from '../components/EnhancedNovelEditor';
 import { useToast } from '@/hooks/use-toast';
 
 // Simple Badge component
@@ -81,6 +81,7 @@ export const ProjectPage: React.FC = () => {
   };
 
   const saveDoc = async (newMarkdown: string) => {
+    console.log('saveDoc called with content length:', newMarkdown.length);
     setSaving(true);
     try {
       await window.api.saveProjectDoc(newMarkdown);
@@ -94,6 +95,7 @@ export const ProjectPage: React.FC = () => {
         description: "Project document has been saved successfully.",
         variant: "default",
       });
+      console.log('Database save completed successfully');
     } catch (error) {
       console.error('Failed to save project document:', error);
       toast({
@@ -138,9 +140,10 @@ export const ProjectPage: React.FC = () => {
           </div>
         </div>
 
-        <NovelEditor 
+        <EnhancedNovelEditor 
           initialMarkdown={markdown}
           onChange={handleSave}
+          onSave={saveDoc}
         />
       </div>
     </div>

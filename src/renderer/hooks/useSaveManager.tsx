@@ -209,6 +209,13 @@ export function SaveManagerProvider({
     hasDraft
   };
 
+  // Expose SaveManager to global scope for debugging
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).saveManager = saveManager;
+    }
+  }, [saveManager]);
+
   return (
     <SaveManagerContext.Provider value={saveManager}>
       {children}

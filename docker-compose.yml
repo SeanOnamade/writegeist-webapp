@@ -17,7 +17,7 @@ services:
       # Mount the entire ai-service directory as the app directory
       - ./ai-service:/srv/app
       # Mount the database file from the project root
-      - ./writegeist.db:/srv/app/writegeist.db
+      - ./writegeist.db:/srv/writegeist.db
     restart: unless-stopped
     labels:
       - "traefik.enable=true"

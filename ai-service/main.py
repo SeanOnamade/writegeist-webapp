@@ -149,8 +149,8 @@ def accept_patch(patch: Patch):
 def load_markdown():
     """Load the project markdown from the SQLite database (same as frontend)"""
     try:
-        # Use the same database file as the frontend
-        db_path = Path(__file__).parent / "writegeist.db"
+        # Use the same database file as the frontend (in project root)
+        db_path = Path(__file__).parent.parent / "writegeist.db"
 
         # If database doesn't exist, create it with default content
         if not db_path.exists():
