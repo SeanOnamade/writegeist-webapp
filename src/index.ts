@@ -117,6 +117,7 @@ const createWindow = (): void => {
     width: 1200,
     minHeight: 600,
     minWidth: 800,
+    icon: path.join(process.cwd(), 'resources', 'logo.ico'),
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegration: false,
