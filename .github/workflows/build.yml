@@ -45,4 +45,6 @@ jobs:
           artifacts: "out/make/squirrel.windows/x64/*.exe"
           draft: false
           prerelease: false
+          allowUpdates: true
+          updateOnlyUnreleased: false
           token: ${{ secrets.GITHUB_TOKEN }} 
