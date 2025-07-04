@@ -8,6 +8,9 @@ import sqlite3
 # LangGraph integration - loads environment variables
 from chapter_ingest_graph import run_chapter_ingest
 
+# Markdown normalization utility
+from utils.normalize_md import normalize_markdown, clean_html_artifacts
+
 from pathlib import Path
 from dotenv import load_dotenv
 import json
@@ -105,11 +108,119 @@ def get_project_section(section_name: str):
     try:
         markdown_content = load_markdown()
         section_content = extract_section(markdown_content, section_name)
-        return {"markdown": section_content}
+        # Normalize the content before returning
+        normalized_content = normalize_markdown(section_content)
+        return {"markdown": normalized_content}
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail={"error": f"Failed to load project section: {str(e)}"},
+        )
+
+
+@app.get("/project/raw")
+def get_raw_project_doc():
+    """
+    Get the raw project markdown without normalization for debugging.
+    """
+    try:
+        # Load current project markdown WITHOUT normalization
+        db_path = Path(__file__).parent.parent / "writegeist.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
+        result = cursor.fetchone()
+        conn.close()
+        
+        if result:
+            raw_markdown = result[0]
+            return {
+                "raw_markdown": raw_markdown,
+                "length": len(raw_markdown),
+                "line_count": len(raw_markdown.split('\n')),
+                "preview": raw_markdown[:200] + "..." if len(raw_markdown) > 200 else raw_markdown
+            }
+        else:
+            return {"error": "No project document found"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to get raw project: {str(e)}"}
+        )
+
+
+@app.post("/project/cleanup", status_code=200)
+def cleanup_project_doc():
+    """
+    Clean up HTML artifacts and normalize the entire project document.
+    This fixes corrupted markdown with mixed HTML tags.
+    """
+    try:
+        # Load current project markdown
+        db_path = Path(__file__).parent.parent / "writegeist.db"
+        conn = sqlite3.connect(str(db_path))
+        cursor = conn.cursor()
+        cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
+        result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return {"error": "No project document found"}
+        
+        original_markdown = result[0]
+        
+        # Clean HTML artifacts and normalize
+        cleaned_markdown = clean_html_artifacts(original_markdown)
+        final_markdown = normalize_markdown(cleaned_markdown)
+        
+        # Save back to database
+        cursor.execute(
+            "UPDATE project_pages SET markdown = ? WHERE id = 1",
+            (final_markdown,)
+        )
+        conn.commit()
+        conn.close()
+        
+        return {
+            "status": "cleaned",
+            "original_length": len(original_markdown),
+            "cleaned_length": len(final_markdown),
+            "html_artifacts_removed": original_markdown != cleaned_markdown,
+            "formatting_normalized": cleaned_markdown != final_markdown
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to clean project: {str(e)}"}
+        )
+
+
+@app.post("/project/normalize", status_code=200)
+def normalize_project_doc():
+    """
+    Manually normalize the entire project document to fix formatting issues.
+    This is a utility endpoint for debugging and fixing formatting problems.
+    """
+    try:
+        # Load current project markdown
+        current_markdown = load_markdown()
+        
+        # Apply normalization
+        normalized_markdown = normalize_markdown(current_markdown)
+        
+        # Save back to database
+        save_markdown_to_database(normalized_markdown)
+        
+        return {
+            "status": "normalized",
+            "original_length": len(current_markdown),
+            "normalized_length": len(normalized_markdown),
+            "changes_made": current_markdown != normalized_markdown
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to normalize project: {str(e)}"}
         )
 
 
@@ -123,23 +234,29 @@ def accept_patch(patch: Patch):
         # Load current project markdown
         current_markdown = load_markdown()
         
+        # Normalize the patch content before applying
+        normalized_patch = normalize_markdown(patch.replace)
+        
         # Apply the patch to the specified section
-        updated_markdown = apply_patch_to_section(current_markdown, patch.section, patch.replace)
+        updated_markdown = apply_patch_to_section(current_markdown, patch.section, normalized_patch)
+        
+        # Normalize the entire document before saving
+        final_markdown = normalize_markdown(updated_markdown)
         
         # Save the updated markdown back to the database
-        save_markdown_to_database(updated_markdown)
+        save_markdown_to_database(final_markdown)
         
         # Also write to temporary file for debugging
         data_dir = Path(__file__).parent / "data"
         data_dir.mkdir(exist_ok=True)
         outfile = data_dir / "n8n_proposal.md"
         outfile.write_text(
-            f"### {patch.section} / {patch.h2 or '(root)'}\n\n{patch.replace}",
+            f"### {patch.section} / {patch.h2 or '(root)'}\n\n{normalized_patch}",
             encoding="utf-8",
         )
         
         # Log the received patch
-        print(f"Applied n8n patch for section '{patch.section}': {len(patch.replace)} characters")
+        print(f"Applied n8n patch for section '{patch.section}': {len(normalized_patch)} characters")
         
         return {"status": "applied", "section": patch.section, "file": str(outfile)}
     except Exception as e:
@@ -175,7 +292,8 @@ def load_markdown():
             markdown_content = create_default_project_doc(db_path)
 
         conn.close()
-        return markdown_content
+        # Normalize the markdown before returning
+        return normalize_markdown(markdown_content)
 
     except Exception as e:
         print(f"Error loading from database: {e}")

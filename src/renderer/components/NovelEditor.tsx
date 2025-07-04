@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Typography } from '@tiptap/extension-typography';
+import { normalizeMarkdown } from '@/lib/normalizeMarkdown';
 
 export interface NovelEditorProps {
   initialMarkdown: string;
@@ -48,20 +49,41 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
   // Convert HTML back to markdown with consistent asterisk bullets
   const htmlToMarkdown = (html: string): string => {
     if (!html) return '';
-    return html
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gim, '# $1\n\n')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gim, '## $1\n\n')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gim, '### $1\n\n')
+    
+    // First, handle complex nested lists properly
+    let rawMarkdown = html
+      // Handle nested lists - convert all <li> tags to markdown bullets first
+      .replace(/<ul[^>]*>/gim, '')
+      .replace(/<\/ul>/gim, '\n')
+      .replace(/<ol[^>]*>/gim, '')
+      .replace(/<\/ol>/gim, '\n')
+      .replace(/<li[^>]*>(.*?)<\/li>/gim, '* $1\n')
+      // Handle headers
+      .replace(/<h1[^>]*>(.*?)<\/h1>/gim, '# $1\n')
+      .replace(/<h2[^>]*>(.*?)<\/h2>/gim, '## $1\n')
+      .replace(/<h3[^>]*>(.*?)<\/h3>/gim, '### $1\n')
+      // Handle formatting
       .replace(/<strong[^>]*>(.*?)<\/strong>/gim, '**$1**')
       .replace(/<em[^>]*>(.*?)<\/em>/gim, '*$1*')
-      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gim, '> $1\n\n')
-      .replace(/<hr[^>]*>/gim, '---\n\n')
-      .replace(/<ul[^>]*><li[^>]*>(.*?)<\/li><\/ul>/gim, '* $1\n')  // Use asterisk bullets
-      .replace(/<ol[^>]*><li[^>]*>(.*?)<\/li><\/ol>/gim, '1. $1\n')
-      .replace(/<p[^>]*>(.*?)<\/p>/gim, '$1\n\n')
+      .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gim, '> $1\n')
+      .replace(/<hr[^>]*>/gim, '---\n')
+      // Handle paragraphs and breaks
+      .replace(/<p[^>]*>(.*?)<\/p>/gim, '$1\n')
       .replace(/<br\s*\/?>/gim, '\n')
       .replace(/&nbsp;/gim, ' ')
       .trim();
+    
+    // Clean up any remaining HTML artifacts
+    rawMarkdown = rawMarkdown
+      .replace(/<[^>]*>/g, '')  // Remove any remaining HTML tags
+      .replace(/&lt;/g, '<')    // Decode HTML entities
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+    
+    // Normalize the markdown to fix spacing issues
+    return normalizeMarkdown(rawMarkdown);
   };
 
   const editor = useEditor({
@@ -84,7 +106,9 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
       const html = editor.getHTML();
       const markdown = htmlToMarkdown(html);
       setWordCount(countWords(markdown));
-      onChange(markdown);
+      // Apply normalization before passing to parent
+      const normalizedMarkdown = normalizeMarkdown(markdown);
+      onChange(normalizedMarkdown);
     },
   });
 

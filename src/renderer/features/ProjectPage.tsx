@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import EnhancedNovelEditor from '../components/EnhancedNovelEditor';
 import { useToast } from '@/hooks/use-toast';
+import { normalizeMarkdown } from '@/lib/normalizeMarkdown';
 
 // Simple Badge component
 const Badge: React.FC<{ children: React.ReactNode; variant?: 'default' | 'secondary' }> = ({ 
@@ -68,7 +69,9 @@ export const ProjectPage: React.FC = () => {
     try {
       setIsLoading(true);
       const doc = await window.api.getProjectDoc();
-      setMarkdown(doc || defaultMarkdown);
+      // Apply normalization as a safety net for documents loaded from database
+      const normalizedDoc = normalizeMarkdown(doc || defaultMarkdown);
+      setMarkdown(normalizedDoc);
       
       // Set last project ID in localStorage for auto-open functionality
       localStorage.setItem('lastProjectId', '1');
