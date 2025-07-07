@@ -268,6 +268,11 @@ app.on('ready', () => {
     // Set up IPC handlers
     ipcMain.handle('save-chapter', async (event, chapter) => {
       try {
+        // Get the current highest order to set the new chapter at the end
+        const { desc } = await import('drizzle-orm');
+        const maxOrderResult = await db.select().from(chapters).orderBy(desc(chapters.order)).limit(1);
+        const nextOrder = maxOrderResult.length > 0 ? (maxOrderResult[0].order || 0) + 1 : 0;
+        
         await db.insert(chapters).values({
           id: chapter.id || `chapter_${Date.now()}`,
           title: chapter.title,
@@ -275,6 +280,7 @@ app.on('ready', () => {
           characters: JSON.stringify(chapter.characters || []),
           locations: JSON.stringify(chapter.locations || []),
           pov: JSON.stringify(chapter.pov || []),
+          order: nextOrder,
         });
         return { success: true };
       } catch (error) {
@@ -285,7 +291,7 @@ app.on('ready', () => {
 
     ipcMain.handle('get-chapters', async () => {
       try {
-        const result = await db.select().from(chapters).orderBy(chapters.createdAt);
+        const result = await db.select().from(chapters).orderBy(chapters.order, chapters.createdAt);
         return result;
       } catch (error) {
         console.error('Error getting chapters:', error);
@@ -448,6 +454,8 @@ app.on('ready', () => {
 
     ipcMain.handle('update-chapter', async (event, chapter) => {
       try {
+        console.log('Updating chapter:', chapter.id, 'Title:', chapter.title, 'Text length:', chapter.text?.length);
+        
         // Helper function to ensure proper JSON string format
         const ensureJsonString = (field: any) => {
           if (typeof field === 'string') {
@@ -466,16 +474,41 @@ app.on('ready', () => {
           }
         };
 
-        await db.update(chapters).set({
+        const updateData = {
           title: chapter.title,
           text: chapter.text,
           characters: ensureJsonString(chapter.characters),
           locations: ensureJsonString(chapter.locations),
           pov: ensureJsonString(chapter.pov),
-        }).where(eq(chapters.id, chapter.id));
+        };
+        
+        console.log('Update data:', updateData);
+        
+        const result = await db.update(chapters).set(updateData).where(eq(chapters.id, chapter.id));
+        console.log('Update result:', result);
+        
         return { success: true };
       } catch (error) {
         console.error('Error updating chapter:', error);
+        throw error;
+      }
+    });
+
+    ipcMain.handle('reorder-chapters', async (event, chapterIds: string[]) => {
+      try {
+        // Update the order of chapters using batch update
+        // We'll use a simple approach: update each chapter with its new position
+        const updatePromises = chapterIds.map((id, index) => {
+          return db.update(chapters).set({
+            order: index
+          }).where(eq(chapters.id, id));
+        });
+        
+        await Promise.all(updatePromises);
+        
+        return { success: true };
+      } catch (error) {
+        console.error('Error reordering chapters:', error);
         throw error;
       }
     });
@@ -570,9 +603,10 @@ app.on('ready', () => {
     // Start database monitoring after initialization
     const dbPath = path.join(process.cwd(), 'writegeist.db');
     // We'll start monitoring once the window is created
+    
+    // Create window after database is initialized and IPC handlers are registered
+    createWindow();
   }).catch(console.error);
-  
-  createWindow();
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common

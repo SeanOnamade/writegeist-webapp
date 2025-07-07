@@ -21,6 +21,7 @@ export const ProjectPage: React.FC = () => {
   const [markdown, setMarkdown] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshPending, setRefreshPending] = useState(false);
   const editorRef = useRef<any>(null);
   const { toast } = useToast();
 
@@ -38,32 +39,44 @@ export const ProjectPage: React.FC = () => {
     loadProjectDoc();
   }, []);
 
-  const refetchMarkdown = () => {
-    loadProjectDoc();
+  // Simple scroll restoration prevention
+  useEffect(() => {
+    // Prevent browser scroll restoration
+    if ('scrollRestoration' in history) {
+      history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  const refetchMarkdown = async () => {
+    try {
+      await loadProjectDoc();
+      setRefreshPending(false); // Clear pending refresh state
+      toast({
+        title: "Refreshed!",
+        description: "Project content has been reloaded from database.",
+        variant: "default",
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh failed",
+        description: "Failed to reload project content. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   useEffect(() => {
-    const onUpdate = () => refetchMarkdown();
+    const onUpdate = () => {
+      setRefreshPending(true);
+      toast({
+        title: "New content available",
+        description: "Click the refresh button to see the latest changes.",
+        variant: "default",
+      });
+    };
     window.addEventListener("project-doc-updated", onUpdate);
     return () => window.removeEventListener("project-doc-updated", onUpdate);
   }, []);
-
-  // Listen for project-doc-updated event and refresh editor content
-  useEffect(() => {
-    const handleDocUpdate = async () => {
-      try {
-        const newMarkdown = await window.api.getProjectDoc();
-        if (newMarkdown && newMarkdown !== markdown) {
-          setMarkdown(newMarkdown);
-        }
-      } catch (error) {
-        console.error('Failed to refresh project document:', error);
-      }
-    };
-    
-    window.addEventListener("project-doc-updated", handleDocUpdate);
-    return () => window.removeEventListener("project-doc-updated", handleDocUpdate);
-  }, [markdown]);
 
   const loadProjectDoc = async () => {
     try {
@@ -131,16 +144,32 @@ export const ProjectPage: React.FC = () => {
   }
 
   return (
-    <div className="flex-1 p-6 overflow-auto">
+    <div id="project-page-container" className="flex-1 p-6 overflow-auto">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-neutral-100 flex items-center gap-3">
               Project
               {saving && <Badge>Saving…</Badge>}
+              {refreshPending && <Badge variant="secondary">Refresh Pending</Badge>}
             </h1>
             <p className="text-neutral-400 text-sm">Manage your project overview and notes with inline editing</p>
           </div>
+          <button
+            onClick={refetchMarkdown}
+            disabled={isLoading}
+            className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md border transition-all duration-200 hover:scale-105 ${
+              refreshPending 
+                ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500 animate-pulse' 
+                : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border-neutral-600'
+            }`}
+            title={refreshPending ? "New content available - click to refresh" : "Refresh content from database"}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {isLoading ? 'Loading...' : refreshPending ? 'Refresh Now' : 'Refresh'}
+          </button>
         </div>
 
         <EnhancedNovelEditor 

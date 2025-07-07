@@ -9,6 +9,7 @@ export interface SaveState {
 
 export interface SaveManager extends SaveState {
   saveNow: () => Promise<void>;
+  forceSave: (content?: string) => Promise<void>;
   scheduleSave: (content: string) => void;
   setContent: (content: string) => void;
   restoreDraft: () => string | null;
@@ -138,6 +139,7 @@ export function SaveManagerProvider({
     try {
       await onSave(content);
       lastSavedContentRef.current = content;
+      
       setSaveState(prev => ({
         ...prev,
         isSaving: false,
@@ -145,6 +147,7 @@ export function SaveManagerProvider({
         unsyncedChanges: false,
         lastError: null
       }));
+      
       clearDraft();
       
       // Auto-sync to VM after successful save (if enabled)
@@ -178,6 +181,23 @@ export function SaveManagerProvider({
     }
     
     return performSave(content);
+  }, [performSave]);
+
+  // Force save function (for Ctrl+S) - always saves regardless of changes
+  const forceSave = useCallback(async (content?: string): Promise<void> => {
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+    
+    const contentToSave = content || currentContentRef.current;
+    
+    // Update the current content reference
+    currentContentRef.current = contentToSave;
+    
+    const result = await performSave(contentToSave);
+    
+    return result;
   }, [performSave]);
 
   // Schedule auto-save
@@ -261,6 +281,7 @@ export function SaveManagerProvider({
   const saveManager: SaveManager = {
     ...saveState,
     saveNow,
+    forceSave,
     scheduleSave,
     setContent,
     restoreDraft,

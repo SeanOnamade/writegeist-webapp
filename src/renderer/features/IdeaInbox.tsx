@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Lightbulb, Send, Clock, CheckCircle, XCircle, Zap } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Lightbulb, Send, Clock, CheckCircle, XCircle, Zap, AlertTriangle, Navigation } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Textarea } from '../../components/ui/textarea';
 
@@ -15,6 +15,44 @@ export const IdeaInbox: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedIdeas, setSubmittedIdeas] = useState<SubmittedIdea[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Check if there are ideas currently being processed
+  const ideasInProgress = submittedIdeas.filter(idea => 
+    ['submitting', 'processing', 'syncing'].includes(idea.status)
+  );
+  const hasIdeasInProgress = ideasInProgress.length > 0;
+
+  // Block navigation when ideas are in progress
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasIdeasInProgress) {
+        e.preventDefault();
+        e.returnValue = 'Ideas are still being processed. Are you sure you want to leave?';
+        return e.returnValue;
+      }
+    };
+
+    const handleNavigation = (e: CustomEvent) => {
+      if (hasIdeasInProgress) {
+        const confirmLeave = window.confirm(
+          'Ideas are still being processed. Leaving now might cause them to fail. Are you sure you want to continue?'
+        );
+        if (!confirmLeave) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
+    if (hasIdeasInProgress) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      // Note: We could add more sophisticated navigation blocking here if needed
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasIdeasInProgress]);
 
   const submitIdea = async () => {
     if (!ideaText.trim() || isSubmitting) return;
@@ -170,6 +208,36 @@ export const IdeaInbox: React.FC = () => {
   return (
     <div className="flex-1 p-6">
       <div className="max-w-4xl mx-auto">
+        {/* Processing Banner */}
+        {hasIdeasInProgress && (
+          <div className="mb-6 p-4 rounded-lg border-2 border-yellow-500/30 bg-yellow-900/20 backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-yellow-400" />
+                <span className="font-semibold text-yellow-400">Processing Ideas</span>
+              </div>
+              <div className="flex-1">
+                <div className="text-sm text-yellow-200">
+                  {ideasInProgress.length} idea{ideasInProgress.length > 1 ? 's' : ''} being processed. Please wait before navigating away.
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 space-y-2">
+              {ideasInProgress.map((idea) => (
+                <div key={idea.id} className="flex items-center gap-2 text-sm">
+                  <span className="text-yellow-300">{getStatusIcon(idea.status)}</span>
+                  <span className="text-yellow-200 flex-1 truncate">"{idea.content}"</span>
+                  <span className="text-yellow-300">{getStatusText(idea.status)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2 text-xs text-yellow-300">
+              <Navigation className="h-3 w-3" />
+              <span>Safe to navigate once all ideas show "Added to your project!"</span>
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 mb-6">
           <Lightbulb className="h-6 w-6 text-yellow-500" />
           <div>
@@ -192,12 +260,17 @@ export const IdeaInbox: React.FC = () => {
             />
             <div className="flex justify-between items-center">
               <span className="text-sm text-neutral-400">
-                🤖 AI will automatically organize this into the right section
+                {hasIdeasInProgress ? (
+                  "⏳ Wait for current ideas to finish before submitting new ones"
+                ) : (
+                  "🤖 AI will automatically organize this into the right section"
+                )}
               </span>
               <Button 
                 onClick={submitIdea}
-                disabled={!ideaText.trim() || isSubmitting}
+                disabled={!ideaText.trim() || isSubmitting || hasIdeasInProgress}
                 className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+                title={hasIdeasInProgress ? "Please wait for current ideas to finish processing" : ""}
               >
                 {isSubmitting ? (
                   <>

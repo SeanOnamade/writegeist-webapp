@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash, Edit } from 'lucide-react';
+import { Plus, Trash, Edit, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -13,9 +13,156 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { ChapterIngest } from './ChapterIngest';
 import { ChapterEditor } from './ChapterEditor';
 import type { Chapter } from '@/types';
+
+// Sortable chapter item component
+interface SortableChapterItemProps {
+  chapter: Chapter;
+  index: number;
+  onEdit: (chapter: Chapter) => void;
+  onDelete: (id: string) => void;
+  isDeletingId: string | null;
+}
+
+function SortableChapterItem({ chapter, index, onEdit, onDelete, isDeletingId }: SortableChapterItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: chapter.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-neutral-800 border border-neutral-700 rounded-lg p-6 hover:bg-neutral-750 transition-all duration-200 ${
+        isDragging ? 'shadow-lg ring-2 ring-blue-500/50' : ''
+      }`}
+    >
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-3">
+          {/* Drag handle */}
+          <button
+            className="text-neutral-500 hover:text-neutral-300 cursor-grab active:cursor-grabbing p-1 rounded hover:bg-neutral-700 transition-colors"
+            {...attributes}
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <h3 className="text-lg font-semibold text-neutral-100">
+            {chapter.title}
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-neutral-400">
+            {new Date(chapter.createdAt).toLocaleDateString()}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-neutral-400 hover:text-blue-400 hover:bg-blue-950/20 p-2"
+            onClick={() => onEdit(chapter)}
+            title="Edit chapter"
+          >
+            <Edit className="h-4 w-4" />
+          </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-neutral-400 hover:text-red-400 hover:bg-red-950/20 p-2"
+                disabled={isDeletingId === chapter.id}
+              >
+                <Trash className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-neutral-900 border-neutral-700">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-neutral-100">
+                  Delete Chapter?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-neutral-400">
+                  Are you sure you want to delete "{chapter.title}"? This action cannot be undone and will permanently remove this chapter and all its content.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="bg-neutral-800 text-neutral-100 border-neutral-700 hover:bg-neutral-700">
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => onDelete(chapter.id)}
+                  className="bg-red-600 text-white hover:bg-red-700"
+                >
+                  Delete Chapter
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
+      <p className="text-neutral-300 text-sm line-clamp-3 mb-4">
+        {chapter.text.substring(0, 200)}...
+      </p>
+      <div className="flex gap-2 text-xs">
+        {(() => {
+          try {
+            const characters = JSON.parse(chapter.characters || '[]');
+            return characters.length > 0 && (
+              <span className="bg-neutral-700 text-neutral-300 px-2 py-1 rounded">
+                Characters: {characters.join(', ')}
+              </span>
+            );
+          } catch {
+            return null;
+          }
+        })()}
+        {(() => {
+          try {
+            const locations = JSON.parse(chapter.locations || '[]');
+            return locations.length > 0 && (
+              <span className="bg-neutral-700 text-neutral-300 px-2 py-1 rounded">
+                Locations: {locations.join(', ')}
+              </span>
+            );
+          } catch {
+            return null;
+          }
+        })()}
+      </div>
+    </div>
+  );
+}
 
 export const FullBook: React.FC = () => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
@@ -25,12 +172,29 @@ export const FullBook: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { toast } = useToast();
 
+  // Configure sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const loadChapters = async () => {
     try {
       const data = await window.api.getChapters();
       setChapters(data);
     } catch (error) {
       console.error('Failed to load chapters:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load chapters. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -53,6 +217,46 @@ export const FullBook: React.FC = () => {
       });
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const reorderChapters = async (newOrder: Chapter[]) => {
+    try {
+      // Extract just the IDs in the new order
+      const chapterIds = newOrder.map(chapter => chapter.id);
+      await (window.api as any).reorderChapters(chapterIds);
+      
+      toast({
+        title: "Success",
+        description: "Chapters reordered successfully!",
+      });
+    } catch (error) {
+      console.error('Failed to reorder chapters:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reorder chapters. Please try again.",
+        variant: "destructive",
+      });
+      // Reload chapters to restore original order
+      loadChapters();
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setChapters((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+        
+        const newOrder = arrayMove(items, oldIndex, newIndex);
+        
+        // Persist the new order to database
+        reorderChapters(newOrder);
+        
+        return newOrder;
+      });
     }
   };
 
@@ -121,7 +325,7 @@ export const FullBook: React.FC = () => {
           <div>
             <h2 className="text-2xl font-bold text-neutral-100 mb-2">Full Book</h2>
             <p className="text-neutral-400">
-              Manage your chapters and view the complete manuscript.
+              Manage your chapters and view the complete manuscript. Drag chapters to reorder them.
             </p>
           </div>
           <Button
@@ -149,96 +353,26 @@ export const FullBook: React.FC = () => {
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {chapters.map((chapter, index) => (
-              <div
-                key={chapter.id}
-                className="bg-neutral-800 border border-neutral-700 rounded-lg p-6 hover:bg-neutral-750 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-neutral-100">
-                    Chapter {index + 1}: {chapter.title}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-neutral-400">
-                      {new Date(chapter.createdAt).toLocaleDateString()}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-neutral-400 hover:text-blue-400 hover:bg-blue-950/20 p-2"
-                      onClick={() => startEditingChapter(chapter)}
-                      title="Edit chapter"
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-neutral-400 hover:text-red-400 hover:bg-red-950/20 p-2"
-                          disabled={deletingId === chapter.id}
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-neutral-900 border-neutral-700">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-neutral-100">
-                            Delete Chapter?
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-neutral-400">
-                            Are you sure you want to delete "{chapter.title}"? This action cannot be undone and will permanently remove this chapter and all its content.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-neutral-800 text-neutral-100 border-neutral-700 hover:bg-neutral-700">
-                            Cancel
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteChapter(chapter.id)}
-                            className="bg-red-600 text-white hover:bg-red-700"
-                          >
-                            Delete Chapter
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-                <p className="text-neutral-300 text-sm line-clamp-3 mb-4">
-                  {chapter.text.substring(0, 200)}...
-                </p>
-                <div className="flex gap-2 text-xs">
-                  {(() => {
-                    try {
-                      const characters = JSON.parse(chapter.characters || '[]');
-                      return characters.length > 0 && (
-                        <span className="bg-neutral-700 text-neutral-300 px-2 py-1 rounded">
-                          Characters: {characters.join(', ')}
-                        </span>
-                      );
-                    } catch {
-                      return null;
-                    }
-                  })()}
-                  {(() => {
-                    try {
-                      const locations = JSON.parse(chapter.locations || '[]');
-                      return locations.length > 0 && (
-                        <span className="bg-neutral-700 text-neutral-300 px-2 py-1 rounded">
-                          Locations: {locations.join(', ')}
-                        </span>
-                      );
-                    } catch {
-                      return null;
-                    }
-                  })()}
-                </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext items={chapters.map(chapter => chapter.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-4">
+                {chapters.map((chapter, index) => (
+                  <SortableChapterItem
+                    key={chapter.id}
+                    chapter={chapter}
+                    index={index}
+                    onEdit={startEditingChapter}
+                    onDelete={deleteChapter}
+                    isDeletingId={deletingId}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </div>

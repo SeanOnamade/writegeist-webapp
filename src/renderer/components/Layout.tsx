@@ -130,13 +130,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const handleProjectSectionClick = (slug: string) => {
     navigateWithSave('/project');
-    // Small delay to ensure navigation completes before scrolling
+    // Longer delay to ensure navigation and rendering complete
     setTimeout(() => {
       const element = document.getElementById(slug);
       if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-    }, 100);
+    }, 200);
+  };
+
+  const handleProjectClick = () => {
+    navigateWithSave('/project');
+    // Longer delay to ensure navigation and rendering complete
+    setTimeout(() => {
+      const container = document.getElementById('project-page-container');
+      if (container) {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }, 200);
   };
 
   return (
@@ -165,7 +176,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700' 
                   : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
               )}
-              onClick={() => navigateWithSave('/project')}
+              onClick={handleProjectClick}
             >
               <Book className="h-4 w-4" />
               <span>Project</span>

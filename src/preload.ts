@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('api', {
   deleteChapter: async (id: string) => {
     return await ipcRenderer.invoke('delete-chapter', id);
   },
+  reorderChapters: async (chapterIds: string[]) => {
+    return await ipcRenderer.invoke('reorder-chapters', chapterIds);
+  },
   getProjectDoc: async () => {
     return await ipcRenderer.invoke('get-project-doc');
   },

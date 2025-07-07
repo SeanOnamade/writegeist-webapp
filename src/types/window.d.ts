@@ -10,6 +10,7 @@ declare global {
       saveChapterToDB: (chapter: any) => Promise<void>;
       getChapters: () => Promise<any[]>;
       deleteChapter: (id: string) => Promise<void>;
+      reorderChapters: (chapterIds: string[]) => Promise<void>;
       getProjectDoc: () => Promise<string>;
       saveProjectDoc: (markdown: string) => Promise<void>;
       appendCharacters: (chars: string[]) => Promise<any>;
