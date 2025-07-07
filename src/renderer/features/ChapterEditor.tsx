@@ -9,12 +9,6 @@ import NovelEditor from '@/renderer/components/NovelEditor';
 import { RotateCcw, BarChart3 } from 'lucide-react';
 import type { Chapter, SyncPayload } from '@/types';
 
-interface LocalSaveState {
-  isSaving: boolean;
-  lastSavedAt: Date | null;
-  hasUnsavedChanges: boolean;
-}
-
 interface ChapterEditorProps {
   chapter?: Chapter | null;
   onSave?: () => void;
@@ -26,35 +20,23 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [draftData, setDraftData] = useState<{ content: string; timestamp: string } | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [draftModalDismissed, setDraftModalDismissed] = useState(false);
-  
-  // Simple local save state - bypass SaveManager complexity
-  const [localSaveState, setLocalSaveState] = useState<LocalSaveState>({
-    isSaving: false,
-    lastSavedAt: null,
-    hasUnsavedChanges: false
-  });
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   
   // Add auto-save timer ref
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { toast } = useToast();
-
   const saveManager = useChapterSaveManager();
   const { stats, updateStats, resetSession, formatDuration } = useWritingStats(content);
 
   const isEditing = !!chapter;
   const chapterId = chapter?.id || 'new-chapter';
-
-  // Track content changes for local state
-  useEffect(() => {
-    const initialContent = chapter?.text || '';
-    const hasChanges = content !== initialContent && content.trim() !== '';
-    setLocalSaveState(prev => ({ ...prev, hasUnsavedChanges: hasChanges }));
-  }, [content, chapter?.text]);
+  const hasUnsavedChanges = content !== (chapter?.text || '') && content.trim() !== '';
 
   // Simple, direct save function
   const directSave = useCallback(async (showToast = true) => {
@@ -66,7 +48,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       autoSaveTimerRef.current = null;
     }
     
-    setLocalSaveState(prev => ({ ...prev, isSaving: true }));
+    setSaving(true);
     
     try {
       const updatedChapter = {
@@ -82,11 +64,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       // Clear any drafts after successful save
       saveManager.clearDraft();
       
-      setLocalSaveState({
-        isSaving: false,
-        lastSavedAt: new Date(),
-        hasUnsavedChanges: false
-      });
+      setLastSavedAt(new Date());
       
       if (showToast) {
         toast({
@@ -98,8 +76,6 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       
       return true;
     } catch (error) {
-      setLocalSaveState(prev => ({ ...prev, isSaving: false }));
-      
       if (showToast) {
         toast({
           title: "Error",
@@ -110,6 +86,8 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       }
       
       return false;
+    } finally {
+      setSaving(false);
     }
   }, [isEditing, content, chapter, toast, saveManager]);
 
@@ -121,7 +99,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
         event.stopPropagation();
         
         // Only save if we're editing, not already saving, and have content
-        if (isEditing && !localSaveState.isSaving && content.trim()) {
+        if (isEditing && !saving && content.trim()) {
           directSave();
         }
       }
@@ -129,7 +107,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isEditing, localSaveState.isSaving, content, directSave]);
+  }, [isEditing, saving, content, directSave]);
 
   // Initialize content and check for drafts
   useEffect(() => {
@@ -159,8 +137,6 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
     
     return () => clearTimeout(timer);
   }, [content, updateStats]);
-
-  // Auto-save is handled by the SaveManager provider
 
   // Manual save handler
   const handleManualSave = async () => {
@@ -198,105 +174,32 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
         if (saved) {
           toast({
             title: "Success",
-            description: "Chapter updated successfully!",
+            description: "Chapter updated successfully.",
           });
-          
-          // Navigate back immediately after successful save
-          if (onSave) {
-            onSave();
-          }
+          onSave?.();
         }
       } else {
-        // Generate unique untitled chapter name if no title provided for new chapters
-        let chapterTitle = title.trim();
-        if (!chapterTitle) {
-          try {
-            const existingChapters = await window.api.getChapters();
-            const untitledChapters = existingChapters.filter((ch: any) => 
-              ch.title && ch.title.match(/^Untitled Chapter( \d+)?$/)
-            );
-            
-            if (untitledChapters.length === 0) {
-              chapterTitle = 'Untitled Chapter';
-            } else {
-              const numbers = untitledChapters
-                .map((ch: any) => {
-                  const match = ch.title.match(/^Untitled Chapter(?: (\d+))?$/);
-                  return match ? (match[1] ? parseInt(match[1]) : 0) : -1;
-                })
-                .filter(n => n >= 0)
-                .sort((a, b) => a - b);
-              
-              const nextNumber = numbers.length === 0 ? 1 : numbers[numbers.length - 1] + 1;
-              chapterTitle = nextNumber === 0 ? 'Untitled Chapter' : `Untitled Chapter ${nextNumber}`;
-            }
-          } catch (error) {
-            console.warn('Failed to check existing chapters for untitled numbering:', error);
-            chapterTitle = 'Untitled Chapter';
-          }
-        }
+        // Creating new chapter
+        const newChapter = {
+          title: title.trim() || 'Untitled Chapter',
+          text: content,
+          characters: [],
+          locations: [],
+          pov: [],
+        };
         
-        // Create new chapter with AI analysis (with fallback)
-        let data;
-        try {
-          // Try AI analysis first (with timeout) - preserve content formatting
-          data = await Promise.race([
-            window.api.ingestChapter({ title: chapterTitle, text: content }),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('AI analysis timeout')), 10000))
-          ]);
-        } catch (error) {
-          console.warn('AI analysis failed, creating simple chapter:', error);
-          // Fallback: create simple chapter without AI analysis - preserve content formatting
-          data = {
-            id: `chapter_${Date.now()}`,
-            title: chapterTitle,
-            text: content,
-            characters: [],
-            locations: [],
-            pov: [],
-            metadata: {
-              summary: "Chapter created without AI analysis.",
-              tropes: [],
-              wordCount: content.trim().split(/\s+/).length
-            }
-          };
-        }
-        
-        // Save to database
-        await window.api.saveChapterToDB(data);
-        
-        // Dynamic H2-aware sync to project document
-        try {
-          const summary = data.metadata?.summary || "Chapter summary unavailable.";
-          const syncPayload: SyncPayload = {
-            title: data.title,
-            text: data.text,
-            characters: data.characters || [],
-            locations: data.locations || [],
-            summary: summary,
-            tropes: data.metadata?.tropes || [],
-            metadata: data.metadata
-          };
-          await window.api.syncChapterDynamic(syncPayload);
-          window.dispatchEvent(new Event("project-doc-updated"));
-        } catch (error) {
-          console.error('Failed to sync chapter dynamically:', error);
-        }
+        await window.api.saveChapterToDB(newChapter);
         
         toast({
           title: "Success",
-          description: "Chapter created successfully!",
+          description: "Chapter created successfully.",
         });
-        
-        // Navigate back immediately after successful save
-        if (onSave) {
-          onSave();
-        }
+        onSave?.();
       }
     } catch (error) {
       toast({
         title: "Error",
-        description: `Failed to ${isEditing ? 'update' : 'create'} chapter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        description: `Failed to ${isEditing ? 'update' : 'create'} chapter.`,
         variant: "destructive",
       });
     } finally {
@@ -331,11 +234,9 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
 
   // Simple save badge component
   const SimpleSaveBadge = () => {
-    const { isSaving, lastSavedAt, hasUnsavedChanges } = localSaveState;
-    
     let icon, text, colorClass, bgClass;
     
-    if (isSaving) {
+    if (saving) {
       icon = <div className="h-3 w-3 rounded-full bg-blue-500 animate-pulse" />;
       text = "Saving...";
       colorClass = "text-blue-400";
@@ -374,7 +275,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
 
   // Handle navigation away with unsaved changes
   const handleCancel = () => {
-    if (localSaveState.hasUnsavedChanges) {
+    if (hasUnsavedChanges) {
       const shouldSave = window.confirm(
         "You have unsaved changes. Would you like to save before leaving?\n\nOK = Save and leave\nCancel = Leave without saving"
       );
@@ -407,9 +308,6 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
   const handleContentChange = useCallback((newContent: string) => {
     setContent(newContent);
     
-    // Update local state to show unsaved changes
-    setLocalSaveState(prev => ({ ...prev, hasUnsavedChanges: true }));
-    
     // Update SaveManager content but don't schedule auto-save (we'll use our own)
     saveManager.setContent(newContent);
     
@@ -423,9 +321,9 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       // Set new auto-save timer (30 seconds)
       autoSaveTimerRef.current = setTimeout(async () => {
         // Check if we're still in editing mode, not currently saving, and have content
-        if (isEditing && !localSaveState.isSaving && newContent.trim()) {
+        if (isEditing && !saving && newContent.trim()) {
           try {
-            setLocalSaveState(prev => ({ ...prev, isSaving: true }));
+            setSaving(true);
             
             const updatedChapter = {
               ...chapter,
@@ -440,14 +338,10 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
             // Clear any drafts after successful save
             saveManager.clearDraft();
             
-            setLocalSaveState({
-              isSaving: false,
-              lastSavedAt: new Date(),
-              hasUnsavedChanges: false
-            });
+            setLastSavedAt(new Date());
           } catch (error) {
             console.error('Auto-save failed:', error);
-            setLocalSaveState(prev => ({ ...prev, isSaving: false }));
+            setSaving(false);
           }
         }
       }, 30000);
@@ -478,11 +372,11 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
           // 2. Not currently saving
           // 3. Draft hasn't been dismissed recently
           // 4. Has recent save state (to avoid showing after successful saves)
-          const recentSave = localSaveState.lastSavedAt && 
-            (Date.now() - localSaveState.lastSavedAt.getTime()) < 10000; // 10 seconds
+          const recentSave = lastSavedAt && 
+            (Date.now() - lastSavedAt.getTime()) < 10000; // 10 seconds
           
           const shouldShowDraft = 
-            !localSaveState.isSaving && 
+            !saving && 
             !draftModalDismissed &&
             !recentSave;
           
@@ -500,7 +394,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
     // Small delay to let the component settle
     const timer = setTimeout(checkForDrafts, 500);
     return () => clearTimeout(timer);
-  }, [isEditing, saveManager, content, localSaveState.lastSavedAt, localSaveState.isSaving, draftModalDismissed]);
+  }, [isEditing, saveManager, content, lastSavedAt, saving, draftModalDismissed]);
 
   return (
     <div className="flex-1 flex flex-col">
@@ -519,7 +413,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
             variant="ghost"
             size="sm"
             onClick={() => directSave()}
-            disabled={localSaveState.isSaving || !content.trim()}
+            disabled={saving || !content.trim()}
             className="text-neutral-400 hover:text-neutral-100"
             title="Quick Save (Ctrl+S)"
           >

@@ -65,12 +65,25 @@ export const ProjectPage: React.FC = () => {
     }
   };
 
+  // Add keyboard shortcut for refresh (F5 or Ctrl+R)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'F5' || (event.ctrlKey && event.key === 'r')) {
+        event.preventDefault();
+        refetchMarkdown();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     const onUpdate = () => {
       setRefreshPending(true);
       toast({
         title: "New content available",
-        description: "Click the refresh button to see the latest changes.",
+        description: "Press F5 or Ctrl+R to refresh and see the latest changes.",
         variant: "default",
       });
     };

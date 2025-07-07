@@ -345,63 +345,13 @@ export default function NovelEditor({ initialMarkdown, onChange }: NovelEditorPr
         </div>
       )}
 
-      {/* Persistent Formatting Toolbar */}
-      <div className="border-b border-neutral-700 bg-neutral-900/50 p-3 flex items-center gap-2 flex-wrap">
-        <button
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('bold') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          <strong>B</strong>
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('italic') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          <em>I</em>
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('heading', { level: 2 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          H2
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('heading', { level: 3 }) ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          H3
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('blockquote') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          "&gt;"
-        </button>
-        <button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`px-2 py-1 rounded text-sm transition-all duration-200 hover:scale-105 ${
-            editor.isActive('bulletList') ? 'bg-neutral-600 text-white' : 'text-neutral-300 hover:bg-neutral-700 hover:text-white'
-          }`}
-        >
-          •
-        </button>
-        <span className="ml-auto text-neutral-400 text-sm">
-          {wordCount} words
-        </span>
+      {/* Word count indicator */}
+      <div className="absolute top-4 left-4 z-10 text-neutral-400 text-sm bg-neutral-900/80 px-2 py-1 rounded-md">
+        {wordCount} words
       </div>
 
       {/* Main Editor Area */}
-      <div className="relative">
+      <div className="relative pt-12">
         <EditorContent editor={editor} />
       </div>
     </div>

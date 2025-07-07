@@ -25,7 +25,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [projectSections, setProjectSections] = useState<Array<{label: string, slug: string}>>([]);
-
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -43,10 +43,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     });
   };
 
-  // Enhanced navigation function with auto-save
+  // Enhanced navigation function with auto-save and loading state
   const navigateWithSave = async (path: string) => {
     // Don't block if we're already on the target path
     if (location.pathname === path) return;
+    
+    // Show loading state
+    setIsNavigating(true);
     
     // Don't block navigation while saving - just trigger save and navigate
     // The save will happen asynchronously
@@ -54,6 +57,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     
     // Navigate immediately for better UX
     navigate(path);
+    
+    // Clear loading state after a short delay
+    setTimeout(() => setIsNavigating(false), 300);
   };
 
   // Default sections - will be overridden by dynamic parsing
@@ -158,7 +164,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         <div className="p-6 border-b border-neutral-900">
           <button
             onClick={handleLogoClick}
-            className="flex items-center gap-2 text-xl font-bold text-neutral-100 hover:text-white transition-all duration-200 hover:scale-105"
+            className="flex items-center gap-2 text-xl font-bold text-neutral-100 hover:text-white transition-all duration-200 hover:scale-105 active:scale-95"
           >
             <FileText className="h-6 w-6" />
             Writegeist
@@ -171,7 +177,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="w-full">
             <div 
               className={clsx(
-                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-all duration-200 hover:scale-105",
+                "flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-all duration-200 hover:scale-105 active:scale-95",
                 isActive('/project') 
                   ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700' 
                   : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
@@ -188,7 +194,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   variant="ghost"
                   size="sm"
                   className={clsx(
-                    "w-full justify-start gap-3 h-8 text-sm",
+                    "w-full justify-start gap-3 h-8 text-sm transition-all duration-200 hover:scale-105 active:scale-95",
                     isActive('/project')
                       ? 'text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800'
                       : 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-800'
@@ -206,7 +212,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             variant="ghost"
             className={clsx(
-              "w-full justify-start gap-3 h-10",
+              "w-full justify-start gap-3 h-10 transition-all duration-200 hover:scale-105 active:scale-95",
               isActive('/chapters')
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
@@ -221,7 +227,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             variant="ghost"
             className={clsx(
-              "w-full justify-start gap-3 h-10",
+              "w-full justify-start gap-3 h-10 transition-all duration-200 hover:scale-105 active:scale-95",
               isActive('/insert-chapter')
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
@@ -236,7 +242,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             variant="ghost"
             className={clsx(
-              "w-full justify-start gap-3 h-10",
+              "w-full justify-start gap-3 h-10 transition-all duration-200 hover:scale-105 active:scale-95",
               isActive('/idea-inbox')
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
@@ -251,7 +257,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           <Button
             variant="ghost"
             className={clsx(
-              "w-full justify-start gap-3 h-10",
+              "w-full justify-start gap-3 h-10 transition-all duration-200 hover:scale-105 active:scale-95",
               isActive('/settings')
                 ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
                 : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
@@ -260,12 +266,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Settings className="h-4 w-4" />
             Settings
-              </Button>
+          </Button>
         </nav>
       </div>
 
       {/* Content */}
       <div className="flex-1 flex flex-col overflow-auto">
+        {/* Loading overlay */}
+        {isNavigating && (
+          <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+            <div className="bg-neutral-900 rounded-lg p-4 flex items-center gap-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+              <span className="text-sm text-neutral-300">Loading...</span>
+            </div>
+          </div>
+        )}
         {children}
       </div>
     </div>
