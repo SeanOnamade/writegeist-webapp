@@ -5,7 +5,11 @@
   "description": "My Electron application description",
   "main": ".webpack/main",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "node start-with-ai.js",
+    "start-electron-only": "electron-forge start",
+    "start-ai": "node start-ai-service.js",
+    "rebuild-embeddings": "cd ai-service && python -m uvicorn main:app --host 127.0.0.1 --port 8000",
+    "check": "node check-system.js",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",

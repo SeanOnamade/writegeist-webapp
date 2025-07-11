@@ -11,7 +11,8 @@ import {
   MapPin,
   Users,
   BookOpen,
-  Library
+  Library,
+  MessageCircle
 } from 'lucide-react';
 import clsx from 'clsx';
 import slugify from 'slugify';
@@ -251,6 +252,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           >
             <Lightbulb className="h-4 w-4" />
             Idea Inbox
+          </Button>
+
+          {/* Story Query Chat */}
+          <Button
+            variant="ghost"
+            className={clsx(
+              "w-full justify-start gap-3 h-10 transition-all duration-200 hover:scale-105 active:scale-95",
+              isActive('/story-chat')
+                ? 'bg-neutral-800 text-neutral-100 ring-1 ring-neutral-700'
+                : 'text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800'
+            )}
+            onClick={() => navigateWithSave('/story-chat')}
+          >
+            <MessageCircle className="h-4 w-4" />
+            Story Chat
           </Button>
 
           {/* Settings */}

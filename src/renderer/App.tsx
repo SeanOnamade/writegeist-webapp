@@ -7,6 +7,7 @@ import { ChapterIngest } from './features/ChapterIngest';
 import { FullBook } from './features/FullBook';
 import { IdeaInbox } from './features/IdeaInbox';
 import { SettingsPage } from './features/SettingsPage';
+import { StoryQueryChat } from './features/StoryQueryChat';
 import { Toaster } from '@/components/ui/toaster';
 import type { Chapter } from '@/types';
 
@@ -68,6 +69,14 @@ const AppContent: React.FC = () => {
           element={
             <Layout>
               <IdeaInbox />
+            </Layout>
+          } 
+        />
+        <Route 
+          path="/story-chat" 
+          element={
+            <Layout>
+              <StoryQueryChat />
             </Layout>
           } 
         />

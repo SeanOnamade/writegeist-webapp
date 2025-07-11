@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Dict, Any
 import os
 import re
 import sqlite3
@@ -10,6 +11,9 @@ from chapter_ingest_graph import run_chapter_ingest
 
 # Markdown normalization utility
 from utils.normalize_md import normalize_markdown, clean_html_artifacts
+
+# Vector search service for Story Query Chat
+from vector_search import VectorSearchService
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -70,6 +74,20 @@ class Patch(BaseModel):
     section: str                # e.g. "Characters"
     h2: str | None = None       # optional sub-header
     replace: str                # the full markdown block
+
+
+class StoryQueryRequest(BaseModel):
+    """Request model for story query chat."""
+    message: str
+    top_k: int = 5  # Number of search results to include
+
+
+class StoryQueryResponse(BaseModel):
+    """Response model for story query chat."""
+    response: str
+    citations: List[Dict[str, Any]]
+    search_results: List[Dict[str, Any]]
+    query_used: str
 
 
 # Remove regex helper functions - now using OpenAI via LangGraph
@@ -460,3 +478,182 @@ def save_markdown_to_database(markdown: str):
     except Exception as e:
         print(f"Error saving to database: {e}")
         raise
+
+
+# Initialize vector search service
+def get_vector_search_service():
+    """Get or create vector search service instance."""
+    db_path = Path(__file__).parent.parent / "writegeist.db"
+    return VectorSearchService(str(db_path))
+
+
+@app.post("/story_query_chat")
+def story_query_chat(request: StoryQueryRequest):
+    """
+    Chat with your story using vector search + GPT-4o.
+    Searches for relevant content and generates contextual responses.
+    """
+    # Check if OpenAI API key is configured
+    if not os.getenv("OPENAI_API_KEY"):
+        raise HTTPException(status_code=501, detail={"error": "No API key"})
+
+    try:
+        # Initialize vector search service
+        vector_service = get_vector_search_service()
+        
+        # Search for relevant content
+        search_results = vector_service.search_similar_content(
+            request.message, 
+            top_k=request.top_k
+        )
+        
+        if not search_results:
+            return StoryQueryResponse(
+                response="I couldn't find any relevant content in your story to answer that question. Try asking about specific characters, locations, or events that might be mentioned in your chapters.",
+                citations=[],
+                search_results=[],
+                query_used=request.message
+            )
+        
+        # Build context from search results
+        context_parts = []
+        citations = []
+        
+        for result in search_results:
+            chunk = result.chunk
+            context_parts.append(f"From Chapter '{chunk.chapter_title}':\n{chunk.text}\n")
+            
+            citations.append({
+                "chapter_id": chunk.chapter_id,
+                "chapter_title": chunk.chapter_title,
+                "relevant_text": chunk.text[:200] + "..." if len(chunk.text) > 200 else chunk.text,
+                "similarity": round(result.similarity, 3),
+                "chunk_index": chunk.chunk_index
+            })
+        
+        context = "\n".join(context_parts)
+        
+        # Generate response using GPT-4o
+        from langchain_openai import ChatOpenAI
+        llm = ChatOpenAI(model="gpt-4o", temperature=0.7)
+        
+        prompt = f"""
+        You are a helpful AI assistant that answers questions about a user's story based on the provided context from their chapters.
+
+        Context from the story:
+        {context}
+
+        User Question: {request.message}
+
+        Instructions:
+        1. Answer the question based ONLY on the provided context
+        2. Be conversational and helpful
+        3. If the context doesn't contain enough information, say so
+        4. Reference specific details from the chapters when possible
+        5. Keep your response concise but informative
+
+        Response:
+        """
+        
+        response = llm.invoke(prompt)
+        
+        return StoryQueryResponse(
+            response=str(response.content),
+            citations=citations,
+            search_results=[{
+                "chapter_id": result.chunk.chapter_id,
+                "chapter_title": result.chunk.chapter_title,
+                "text": result.chunk.text,
+                "similarity": round(result.similarity, 3)
+            } for result in search_results],
+            query_used=request.message
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail={"error": f"Story query chat failed: {str(e)}"}
+        )
+
+
+@app.post("/rebuild_embeddings")
+def rebuild_embeddings():
+    """
+    Rebuild embeddings for all chapters. This is useful after adding new chapters
+    or when the embedding model has been updated.
+    """
+    try:
+        vector_service = get_vector_search_service()
+        result = vector_service.rebuild_all_embeddings()
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to rebuild embeddings: {str(e)}"}
+        )
+
+
+@app.get("/embeddings/status")
+def get_embeddings_status():
+    """
+    Get information about the current state of embeddings.
+    """
+    try:
+        vector_service = get_vector_search_service()
+        return vector_service.get_chapter_info()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to get embeddings status: {str(e)}"}
+        )
+
+
+@app.delete("/embeddings/cleanup/{chapter_id}")
+def cleanup_embeddings_for_chapter(chapter_id: str):
+    """
+    Clean up embeddings for a deleted chapter.
+    """
+    try:
+        vector_service = get_vector_search_service()
+        
+        # Delete embeddings for the chapter
+        db_path = Path(__file__).parent.parent / "writegeist.db"
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM chapter_embeddings WHERE chapter_id = ?", (chapter_id,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+        
+        return {
+            "success": True, 
+            "message": f"Cleaned up {deleted_count} embeddings for chapter {chapter_id}",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to clean up embeddings: {str(e)}"}
+        )
+
+@app.post("/embeddings/generate/{chapter_id}")
+def generate_embeddings_for_chapter(chapter_id: str):
+    """
+    Generate embeddings for a specific chapter.
+    """
+    try:
+        vector_service = get_vector_search_service()
+        success = vector_service.generate_embeddings_for_chapter(chapter_id)
+        
+        if success:
+            return {"success": True, "message": f"Generated embeddings for chapter {chapter_id}"}
+        else:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": f"Chapter {chapter_id} not found or failed to process"}
+            )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to generate embeddings: {str(e)}"}
+        )

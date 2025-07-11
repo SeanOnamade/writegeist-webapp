@@ -254,8 +254,14 @@ const startWebhookServer = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
-  // Start the FastAPI backend
-  startApiBackend();
+  // Check if AI service is already running (e.g., from start-with-ai.js)
+  // If SKIP_AI_SERVICE env var is set, don't start our own AI service
+  if (!process.env.SKIP_AI_SERVICE) {
+    // Start the FastAPI backend
+    startApiBackend();
+  } else {
+    console.log('Skipping AI service startup - already managed externally');
+  }
   
   // Start the webhook server for n8n integration
   startWebhookServer();
@@ -273,8 +279,10 @@ app.on('ready', () => {
         const maxOrderResult = await db.select().from(chapters).orderBy(desc(chapters.order)).limit(1);
         const nextOrder = maxOrderResult.length > 0 ? (maxOrderResult[0].order || 0) + 1 : 0;
         
+        const chapterId = chapter.id || `chapter_${Date.now()}`;
+        
         await db.insert(chapters).values({
-          id: chapter.id || `chapter_${Date.now()}`,
+          id: chapterId,
           title: chapter.title,
           text: chapter.text,
           characters: JSON.stringify(chapter.characters || []),
@@ -282,6 +290,25 @@ app.on('ready', () => {
           pov: JSON.stringify(chapter.pov || []),
           order: nextOrder,
         });
+        
+        // Automatically generate embeddings for the new chapter
+        try {
+          const response = await fetch(`http://localhost:8000/embeddings/generate/${chapterId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            console.log('Embeddings generated for new chapter:', chapterId);
+          } else {
+            console.warn('Failed to generate embeddings for new chapter:', chapterId);
+          }
+        } catch (error) {
+          console.warn('Could not generate embeddings (AI service may not be running):', error);
+        }
+        
         return { success: true };
       } catch (error) {
         console.error('Error saving chapter:', error);
@@ -302,6 +329,25 @@ app.on('ready', () => {
     ipcMain.handle('delete-chapter', async (event, id) => {
       try {
         await db.delete(chapters).where(eq(chapters.id, id));
+        
+        // Clean up embeddings for the deleted chapter
+        try {
+          const response = await fetch(`http://localhost:8000/embeddings/cleanup/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            console.log('Embeddings cleaned up for deleted chapter:', id);
+          } else {
+            console.warn('Failed to clean up embeddings for deleted chapter:', id);
+          }
+        } catch (error) {
+          console.warn('Could not clean up embeddings (AI service may not be running):', error);
+        }
+        
         return { success: true };
       } catch (error) {
         console.error('Error deleting chapter:', error);
@@ -486,6 +532,27 @@ app.on('ready', () => {
         
         const result = await db.update(chapters).set(updateData).where(eq(chapters.id, chapter.id));
         console.log('Update result:', result);
+        
+        // Automatically regenerate embeddings for the updated chapter
+        // TEMPORARILY DISABLED - causing memory issues and UI freezing
+        /*
+        try {
+          const response = await fetch(`http://localhost:8000/embeddings/generate/${chapter.id}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            console.log('Embeddings updated for chapter:', chapter.id);
+          } else {
+            console.warn('Failed to update embeddings for chapter:', chapter.id);
+          }
+        } catch (error) {
+          console.warn('Could not update embeddings (AI service may not be running):', error);
+        }
+        */
         
         return { success: true };
       } catch (error) {
