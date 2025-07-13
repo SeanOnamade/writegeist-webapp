@@ -56,6 +56,12 @@ contextBridge.exposeInMainWorld('api', {
   appendCharacters: async (chars: string[]) => {
     return await ipcRenderer.invoke('append-characters', chars);
   },
+  appendLocations: async (locations: string[]) => {
+    return await ipcRenderer.invoke('append-locations', locations);
+  },
+  appendSummaries: async (summaries: string[]) => {
+    return await ipcRenderer.invoke('append-summaries', summaries);
+  },
   updateChapter: async (chapter: any) => {
     return await ipcRenderer.invoke('update-chapter', chapter);
   },
@@ -79,5 +85,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   syncFromVM: async () => {
     return await ipcRenderer.invoke('sync-from-vm');
+  },
+  systemHealthCheck: async () => {
+    return await ipcRenderer.invoke('system-health-check');
   },
 });

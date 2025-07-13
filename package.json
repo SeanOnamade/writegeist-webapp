@@ -14,7 +14,8 @@
     "make": "electron-forge make",
     "publish": "electron-forge publish",
     "lint": "eslint --ext .ts,.tsx .",
-    "sync-db": "powershell -ExecutionPolicy Bypass -File sync-to-vm.ps1"
+    "sync-db": "powershell -ExecutionPolicy Bypass -File sync-to-vm.ps1",
+    "restore-backup": "node restore-backup.js"
   },
   "keywords": [],
   "author": {

@@ -124,11 +124,46 @@ def get_project_section(section_name: str):
     Get a specific section from the project markdown file.
     """
     try:
-        markdown_content = load_markdown()
+        # Validate section name
+        if not section_name or not section_name.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Section name cannot be empty"}
+            )
+        
+        # Sanitize section name
+        section_name = section_name.strip()
+        
+        # Load markdown with error handling
+        try:
+            markdown_content = load_markdown()
+        except Exception as db_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Database connection failed: {str(db_error)}"}
+            )
+        
+        if not markdown_content:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "No project document found"}
+            )
+        
         section_content = extract_section(markdown_content, section_name)
+        
+        # Check if section exists
+        if section_content is None:
+            raise HTTPException(
+                status_code=404,
+                detail={"error": f"Section '{section_name}' not found"}
+            )
+        
         # Normalize the content before returning
         normalized_content = normalize_markdown(section_content)
         return {"markdown": normalized_content}
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -139,31 +174,86 @@ def get_project_section(section_name: str):
 @app.get("/project/raw")
 def get_raw_project_doc():
     """
-    Get the raw project markdown without normalization for debugging.
+    Get the raw project document from the database.
     """
     try:
-        # Load current project markdown WITHOUT normalization
-        db_path = Path(__file__).parent.parent / "writegeist.db"
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
-        result = cursor.fetchone()
-        conn.close()
+        # Load markdown with error handling
+        try:
+            markdown_content = load_markdown()
+        except Exception as db_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Database connection failed: {str(db_error)}"}
+            )
         
-        if result:
-            raw_markdown = result[0]
-            return {
-                "raw_markdown": raw_markdown,
-                "length": len(raw_markdown),
-                "line_count": len(raw_markdown.split('\n')),
-                "preview": raw_markdown[:200] + "..." if len(raw_markdown) > 200 else raw_markdown
-            }
-        else:
-            return {"error": "No project document found"}
+        if not markdown_content:
+            # Return default markdown if none exists
+            markdown_content = create_default_project_markdown()
+        
+        return {"raw_markdown": markdown_content}
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail={"error": f"Failed to get raw project: {str(e)}"}
+            detail={"error": f"Failed to load project document: {str(e)}"},
+        )
+
+
+@app.post("/project/raw")
+def update_raw_project_doc(request: dict):
+    """
+    Update the entire project document in the database.
+    Used for syncing local changes to cloud before idea processing.
+    """
+    try:
+        # Validate request
+        if not request or "raw_markdown" not in request:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "raw_markdown field is required"}
+            )
+        
+        raw_markdown = request["raw_markdown"]
+        
+        # Validate content
+        if not isinstance(raw_markdown, str):
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "raw_markdown must be a string"}
+            )
+        
+        # Normalize the markdown before saving
+        try:
+            normalized_markdown = normalize_markdown(raw_markdown)
+        except Exception as norm_error:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": f"Failed to normalize markdown: {str(norm_error)}"}
+            )
+        
+        # Save to database
+        try:
+            save_markdown_to_database(normalized_markdown)
+        except Exception as save_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Failed to save to database: {str(save_error)}"}
+            )
+        
+        return {
+            "success": True,
+            "message": "Project document updated successfully",
+            "content_length": len(normalized_markdown)
+        }
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail={"error": f"Failed to update project document: {str(e)}"},
         )
 
 
@@ -247,40 +337,119 @@ def accept_patch(patch: Patch):
     """
     n8n sends a complete markdown block that should replace the
     current block and update the project database.
+    Also handles full document sync when section is "FULL_DOCUMENT_SYNC".
     """
     try:
-        # Load current project markdown
-        current_markdown = load_markdown()
+        # Validate patch input
+        if not patch.section or not patch.section.strip():
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Section name is required and cannot be empty"}
+            )
+        
+        if not patch.replace and patch.replace != "":
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Replace content is required"}
+            )
+        
+        # Sanitize section name
+        section_name = patch.section.strip()
+        
+        # Special case: Full document sync
+        if section_name == "FULL_DOCUMENT_SYNC":
+            # Replace the entire document with the provided content
+            try:
+                normalized_content = normalize_markdown(patch.replace)
+                save_markdown_to_database(normalized_content)
+                print(f"Full document sync completed: {len(normalized_content)} characters")
+                return {"status": "success", "message": "Full document synced successfully"}
+            except Exception as sync_error:
+                raise HTTPException(
+                    status_code=500,
+                    detail={"error": f"Failed to sync full document: {str(sync_error)}"}
+                )
+        
+        # Normal section-based processing
+        # Validate section name against known sections
+        valid_sections = ["Ideas-Notes", "Setting", "Full Outline", "Characters", "Plot", "Themes"]
+        if section_name not in valid_sections:
+            # Log warning but don't fail - allow dynamic sections
+            print(f"Warning: Unknown section '{section_name}'. Valid sections: {valid_sections}")
+        
+        # Load current project markdown with error handling
+        try:
+            current_markdown = load_markdown()
+        except Exception as db_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Failed to load current project: {str(db_error)}"}
+            )
+        
+        if not current_markdown:
+            # Create default markdown if none exists
+            current_markdown = create_default_project_markdown()
         
         # Normalize the patch content before applying
-        normalized_patch = normalize_markdown(patch.replace)
+        try:
+            normalized_patch = normalize_markdown(patch.replace)
+        except Exception as norm_error:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": f"Failed to normalize patch content: {str(norm_error)}"}
+            )
         
         # Apply the patch to the specified section
-        updated_markdown = apply_patch_to_section(current_markdown, patch.section, normalized_patch)
+        try:
+            updated_markdown = apply_patch_to_section(current_markdown, section_name, normalized_patch)
+        except Exception as patch_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Failed to apply patch to section '{section_name}': {str(patch_error)}"}
+            )
         
         # Normalize the entire document before saving
-        final_markdown = normalize_markdown(updated_markdown)
+        try:
+            final_markdown = normalize_markdown(updated_markdown)
+        except Exception as final_norm_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Failed to normalize final document: {str(final_norm_error)}"}
+            )
         
         # Save the updated markdown back to the database
-        save_markdown_to_database(final_markdown)
+        try:
+            save_markdown_to_database(final_markdown)
+        except Exception as save_error:
+            raise HTTPException(
+                status_code=500,
+                detail={"error": f"Failed to save to database: {str(save_error)}"}
+            )
         
         # Also write to temporary file for debugging
-        data_dir = Path(__file__).parent / "data"
-        data_dir.mkdir(exist_ok=True)
-        outfile = data_dir / "n8n_proposal.md"
-        outfile.write_text(
-            f"### {patch.section} / {patch.h2 or '(root)'}\n\n{normalized_patch}",
-            encoding="utf-8",
-        )
+        try:
+            data_dir = Path(__file__).parent / "data"
+            data_dir.mkdir(exist_ok=True)
+            outfile = data_dir / "n8n_proposal.md"
+            outfile.write_text(
+                f"### {section_name} / {patch.h2 or '(root)'}\n\n{normalized_patch}",
+                encoding="utf-8",
+            )
+        except Exception as file_error:
+            # Don't fail the request if debug file can't be written
+            print(f"Warning: Could not write debug file: {file_error}")
         
         # Log the received patch
-        print(f"Applied n8n patch for section '{patch.section}': {len(normalized_patch)} characters")
+        print(f"Applied n8n patch for section '{section_name}': {len(normalized_patch)} characters")
         
-        return {"status": "applied", "section": patch.section, "file": str(outfile)}
+        return {"status": "accepted"}
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
         raise HTTPException(
-            status_code=500, 
-            detail={"error": f"Failed to process patch: {str(e)}"}
+            status_code=500,
+            detail={"error": f"Failed to process patch: {str(e)}"},
         )
 
 
@@ -291,56 +460,77 @@ def load_markdown():
         # Use the same database file as the frontend (in project root)
         db_path = Path(__file__).parent.parent / "writegeist.db"
 
-        # If database doesn't exist, create it with default content
+        # Check if database file exists and is readable
         if not db_path.exists():
+            print(f"Database file not found at {db_path}, creating default project")
             return create_default_project_doc(db_path)
+        
+        if not os.access(db_path, os.R_OK):
+            raise Exception(f"Database file is not readable: {db_path}")
 
-        # Connect to database and get the project markdown
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
+        # Connect to database with timeout and error handling
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=10.0)  # 10 second timeout
+            conn.execute("PRAGMA busy_timeout = 10000")  # 10 second busy timeout
+            cursor = conn.cursor()
+        except sqlite3.OperationalError as db_error:
+            raise Exception(f"Failed to connect to database: {str(db_error)}")
+        except Exception as conn_error:
+            raise Exception(f"Database connection error: {str(conn_error)}")
 
-        # Get the project markdown from project_pages table
-        cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
-        result = cursor.fetchone()
+        try:
+            # Test database integrity
+            cursor.execute("PRAGMA integrity_check")
+            integrity_result = cursor.fetchone()
+            if integrity_result[0] != 'ok':
+                raise Exception(f"Database integrity check failed: {integrity_result[0]}")
 
-        if result:
-            markdown_content = result[0]
-        else:
-            # No project document exists, create default
-            markdown_content = create_default_project_doc(db_path)
+            # Get the project markdown from project_pages table
+            cursor.execute("SELECT markdown FROM project_pages WHERE id = 1")
+            result = cursor.fetchone()
 
-        conn.close()
-        # Normalize the markdown before returning
-        return normalize_markdown(markdown_content)
+            if result:
+                markdown_content = result[0]
+                if not markdown_content:
+                    print("Warning: Empty markdown content in database, using default")
+                    markdown_content = create_default_project_markdown()
+            else:
+                # No project document exists, create default
+                print("No project document found in database, creating default")
+                markdown_content = create_default_project_doc(db_path)
+
+            # Normalize the markdown before returning
+            normalized_content = normalize_markdown(markdown_content)
+            return normalized_content
+
+        except sqlite3.Error as sql_error:
+            raise Exception(f"Database query error: {str(sql_error)}")
+        except Exception as query_error:
+            raise Exception(f"Error executing database query: {str(query_error)}")
+        finally:
+            try:
+                conn.close()
+            except:
+                pass  # Ignore close errors
 
     except Exception as e:
         print(f"Error loading from database: {e}")
-        # Fallback to default content
-        return """# My Project
-
-## Ideas-Notes
-
-## Setting
-
-## Full Outline
-
-## Characters"""
+        # Fallback to default content with detailed error info
+        fallback_content = create_default_project_markdown()
+        print(f"Using fallback content due to database error: {str(e)}")
+        return fallback_content
 
 
 def create_default_project_doc(db_path):
-    """Create default project document in database"""
-    default_markdown = """# My Project
-
-## Ideas-Notes
-
-## Setting
-
-## Full Outline
-
-## Characters"""
+    """Create default project document in database with enhanced error handling"""
+    default_markdown = create_default_project_markdown()
 
     try:
-        conn = sqlite3.connect(str(db_path))
+        # Ensure directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        conn = sqlite3.connect(str(db_path), timeout=10.0)
+        conn.execute("PRAGMA busy_timeout = 10000")
         cursor = conn.cursor()
 
         # Create tables if they don't exist (same as frontend)
@@ -348,7 +538,9 @@ def create_default_project_doc(db_path):
             """
             CREATE TABLE IF NOT EXISTS project_pages (
                 id INTEGER PRIMARY KEY,
-                markdown TEXT NOT NULL
+                markdown TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """
         )
@@ -361,8 +553,12 @@ def create_default_project_doc(db_path):
 
         conn.commit()
         conn.close()
+        print(f"Created default project document in database: {db_path}")
         return default_markdown
 
+    except sqlite3.Error as sql_error:
+        print(f"SQLite error creating default project: {sql_error}")
+        return default_markdown
     except Exception as e:
         print(f"Error creating default project: {e}")
         return default_markdown
@@ -397,6 +593,14 @@ def extract_section(markdown: str, section_name: str) -> str:
         content_lines.pop(0)
     while content_lines and not content_lines[-1].strip():
         content_lines.pop()
+    
+    # Clean up extra asterisks that might be added by n8n processing
+    # If the entire section starts with a standalone asterisk, remove it
+    if content_lines and content_lines[0].strip() == '*':
+        content_lines.pop(0)
+        # Also remove any empty lines after the asterisk
+        while content_lines and not content_lines[0].strip():
+            content_lines.pop(0)
     
     return '\n'.join(content_lines)
 
@@ -445,39 +649,64 @@ def apply_patch_to_section(markdown: str, section_name: str, new_content: str) -
 
 
 def save_markdown_to_database(markdown: str):
-    """Save the updated markdown to the database"""
+    """Save the updated markdown to the database with enhanced error handling"""
     try:
+        # Validate input
+        if markdown is None:
+            raise ValueError("Markdown content cannot be None")
+        
         # Use the same database file as the frontend (in project root)
         db_path = Path(__file__).parent.parent / "writegeist.db"
         
-        # Connect to database and update the project markdown
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
+        # Ensure directory exists
+        db_path.parent.mkdir(parents=True, exist_ok=True)
         
-        # Create tables if they don't exist (same as frontend)
-        cursor.execute(
+        # Connect to database with timeout and error handling
+        try:
+            conn = sqlite3.connect(str(db_path), timeout=10.0)
+            conn.execute("PRAGMA busy_timeout = 10000")
+            cursor = conn.cursor()
+        except sqlite3.OperationalError as db_error:
+            raise Exception(f"Failed to connect to database for save: {str(db_error)}")
+        
+        try:
+            # Create tables if they don't exist (match frontend schema exactly)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS project_pages (
+                    id INTEGER PRIMARY KEY,
+                    markdown TEXT NOT NULL
+                )
             """
-            CREATE TABLE IF NOT EXISTS project_pages (
-                id INTEGER PRIMARY KEY,
-                markdown TEXT NOT NULL
             )
-        """
-        )
-        
-        # Update the project markdown
-        cursor.execute(
-            "INSERT OR REPLACE INTO project_pages (id, markdown) VALUES (1, ?)",
-            (markdown,),
-        )
-        
-        conn.commit()
-        conn.close()
-        
-        print("Successfully saved updated markdown to database")
+            
+            # Update the project markdown (match frontend approach)
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO project_pages (id, markdown) 
+                VALUES (1, ?)
+                """,
+                (markdown,),
+            )
+            
+            conn.commit()
+            print(f"Successfully saved updated markdown to database ({len(markdown)} characters)")
+            
+        except sqlite3.Error as sql_error:
+            conn.rollback()
+            raise Exception(f"Database save error: {str(sql_error)}")
+        except Exception as save_error:
+            conn.rollback()
+            raise Exception(f"Error saving to database: {str(save_error)}")
+        finally:
+            try:
+                conn.close()
+            except:
+                pass  # Ignore close errors
         
     except Exception as e:
         print(f"Error saving to database: {e}")
-        raise
+        raise  # Re-raise to be handled by caller
 
 
 # Initialize vector search service
@@ -657,3 +886,16 @@ def generate_embeddings_for_chapter(chapter_id: str):
             status_code=500,
             detail={"error": f"Failed to generate embeddings: {str(e)}"}
         )
+
+
+def create_default_project_markdown():
+    """Create default project markdown structure"""
+    return """# My Project
+
+## Ideas-Notes
+
+## Setting
+
+## Full Outline
+
+## Characters"""

@@ -32,12 +32,14 @@ declare global {
     api: {
       echo: (text: string) => Promise<string>;
       ingestChapter: (payload: { title: string; text: string }) => Promise<any>;
-      saveChapterToDB: (chapter: any) => Promise<void>;
+      saveChapterToDB: (chapter: any) => Promise<{ success: boolean; chapterId?: string }>;
       getChapters: () => Promise<Chapter[]>;
       deleteChapter: (id: string) => Promise<void>;
       getProjectDoc: () => Promise<string>;
       saveProjectDoc: (markdown: string) => Promise<void>;
-      appendCharacters: (chars: string[]) => Promise<void>;
+      appendCharacters: (chars: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
+      appendLocations: (locations: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
+      appendSummaries: (summaries: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
       updateChapter: (chapter: any) => Promise<void>;
       syncChapterDynamic: (result: SyncPayload) => Promise<{ success: boolean }>;
       getConfig: () => Promise<{ OPENAI_API_KEY: string; PORT: number }>;

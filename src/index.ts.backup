@@ -110,8 +110,6 @@ const startApiBackend = () => {
   }
 };
 
-let globalMainWindow: BrowserWindow | null = null;
-
 const createWindow = (): void => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
@@ -127,16 +125,13 @@ const createWindow = (): void => {
     },
   });
 
-  // Store global reference for webhook server
-  globalMainWindow = mainWindow;
-
   // Configure CSP to allow localhost connections
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 https://n8n-writegeist-u50080.vm.elestio.app https://python-fastapi-u50080.vm.elestio.app; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+          "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 https://n8n-writegeist-u50080.vm.elestio.app; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
         ]
       }
     });
@@ -158,49 +153,6 @@ let dbWatcher: fs.FSWatcher | null = null;
 let lastDbModified: number = 0;
 
 // Database sync safety system
-// Centralized sync operation queue to prevent concurrent operations
-class SyncOperationQueue {
-  private queue: Array<() => Promise<any>> = [];
-  private isProcessing = false;
-
-  async add<T>(operation: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.queue.push(async () => {
-        try {
-          const result = await operation();
-          resolve(result);
-        } catch (error) {
-          reject(error);
-        }
-      });
-      
-      this.processQueue();
-    });
-  }
-
-  private async processQueue() {
-    if (this.isProcessing || this.queue.length === 0) {
-      return;
-    }
-
-    this.isProcessing = true;
-    
-    while (this.queue.length > 0) {
-      const operation = this.queue.shift();
-      if (operation) {
-        try {
-          await operation();
-        } catch (error) {
-          console.error('Sync operation failed:', error);
-        }
-      }
-    }
-    
-    this.isProcessing = false;
-  }
-}
-
-const syncQueue = new SyncOperationQueue();
 let syncMutex = false;
 let dbConnection: any = null;
 
@@ -215,10 +167,6 @@ const createSafeBackup = (reason: string = 'sync') => {
       if (stats.size > 0) {
         fs.copyFileSync('writegeist.db', backupPath);
         console.log(`Safe backup created: ${backupPath} (${reason})`);
-        
-        // Clean up old backups after creating new one
-        cleanupOldBackups();
-        
         return backupPath;
       }
     }
@@ -226,58 +174,6 @@ const createSafeBackup = (reason: string = 'sync') => {
   } catch (error) {
     console.error(`Failed to create safe backup: ${error.message}`);
     return null;
-  }
-};
-
-const cleanupOldBackups = () => {
-  try {
-    const fs = require('fs');
-    
-    // Get all backup files (including all types)
-    const allBackupFiles = fs.readdirSync('.')
-      .filter(file => 
-        (file.startsWith('writegeist_backup_') || 
-         file.startsWith('writegeist_temp_') || 
-         file.startsWith('writegeist_corrupted_') ||
-         file.startsWith('writegeist_from_vm') ||
-         file.startsWith('writegeist_latest')) && 
-        file.endsWith('.db')
-      )
-      .map(file => {
-        const stats = fs.statSync(file);
-        return {
-          name: file,
-          mtime: stats.mtime,
-          size: stats.size
-        };
-      })
-      .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Sort by modification time, newest first
-    
-    // Keep only the last 15 backups (increased from 10 for safety)
-    if (allBackupFiles.length > 15) {
-      const filesToDelete = allBackupFiles.slice(15);
-      let deletedCount = 0;
-      
-      filesToDelete.forEach(fileInfo => {
-        try {
-          // Don't delete very recent files (less than 1 hour old) as safety measure
-          const hourAgo = new Date(Date.now() - 60 * 60 * 1000);
-          if (fileInfo.mtime < hourAgo) {
-            fs.unlinkSync(fileInfo.name);
-            deletedCount++;
-            console.log(`Deleted old backup: ${fileInfo.name}`);
-          }
-        } catch (error) {
-          console.warn(`Could not delete old backup ${fileInfo.name}:`, error.message);
-        }
-      });
-      
-      if (deletedCount > 0) {
-        console.log(`Cleaned up ${deletedCount} old backup files`);
-      }
-    }
-  } catch (error) {
-    console.warn('Could not cleanup old backups:', error.message);
   }
 };
 
@@ -418,25 +314,12 @@ const safeDatabaseSync = async (operation: 'from-vm' | 'to-vm' | 'webhook', opti
     }
     
     console.log(`Safe database sync completed: ${operation}`);
-    
-    // Cleanup temp files after successful sync
-    try {
-      const fs = require('fs');
-      if (fs.existsSync('writegeist_temp_safe.db')) {
-        fs.unlinkSync('writegeist_temp_safe.db');
-      }
-      // Clean up any other temp files
-      cleanupOldBackups();
-    } catch (cleanupError) {
-      console.warn('Failed to cleanup temp files after successful sync:', cleanupError.message);
-    }
-    
     return { success: true, message: `Safe ${operation} sync completed`, output: syncResult?.stdout };
     
   } catch (error) {
     console.error(`Safe database sync failed (${operation}):`, error);
     
-    // Cleanup temp files on error
+    // Cleanup temp files
     try {
       const fs = require('fs');
       if (fs.existsSync('writegeist_temp_safe.db')) {
@@ -464,74 +347,33 @@ const startDbMonitoring = (dbPath: string, mainWindow: BrowserWindow) => {
     lastDbModified = stats.mtimeMs;
 
     // Watch for file changes
-    // DISABLED: File watcher functionality to prevent infinite loops
-    // dbWatcher = fs.watch(dbPath, (eventType) => {
-    //   if (eventType === 'change') {
-    //     try {
-    //       const newStats = fs.statSync(dbPath);
-    //       if (newStats.mtimeMs > lastDbModified) {
-    //         lastDbModified = newStats.mtimeMs;
-    //         
-    //         // Notify renderer about database changes
-    //         mainWindow.webContents.send('db-updated', {
-    //           table: 'unknown', // We can't determine specific table from file watch
-    //           updatedAt: new Date().toISOString()
-    //         });
-    //       }
-    //     } catch (error) {
-    //       console.warn('Error checking database modification:', error);
-    //     }
-    //   }
-    // });
-
-    console.log('Database monitoring started');
+    dbWatcher = fs.watch(dbPath, (eventType) => {
+      if (eventType === 'change') {
+        try {
+          const newStats = fs.statSync(dbPath);
+          if (newStats.mtimeMs > lastDbModified) {
+            lastDbModified = newStats.mtimeMs;
+            
+            // Notify renderer about database changes
+            mainWindow.webContents.send('db-updated', {
+              table: 'unknown', // We can't determine specific table from file watch
+              updatedAt: new Date().toISOString()
+            });
+          }
         } catch (error) {
-    console.warn('Failed to start database monitoring:', error);
+          console.warn('Error checking database modification:', error);
         }
-};
-
-// Helper function to insert content into a specific markdown section
-function insertContentIntoSection(markdown: string, sectionName: string, content: string): string {
-  // Ensure the section exists
-  const sectionHeader = `## ${sectionName}`;
-  if (!markdown.includes(sectionHeader)) {
-    markdown += `\n\n${sectionHeader}\n`;
-  }
-  
-  // Find the section content
-  const sectionRegex = new RegExp(`(## ${escapeRegExp(sectionName)}[\\s\\S]*?)(?=\\n## |$)`, "m");
-  const match = markdown.match(sectionRegex);
-  
-  if (match) {
-    let section = match[0];
-    
-    // Add content as bullet points if it doesn't already exist
-    const contentLines = content.split('\n').filter(line => line.trim());
-    contentLines.forEach(line => {
-      const bulletPoint = `* ${line.trim()}`;
-      if (!section.includes(line.trim())) {
-        if (!section.endsWith('\n')) {
-          section += '\n';
-        }
-        section += `${bulletPoint}\n`;
       }
     });
-    
-    // Replace the section in the markdown
-    return markdown.replace(sectionRegex, section);
-  } else {
-    // If section not found, append it
-    return markdown + `\n\n${sectionHeader}\n* ${content}\n`;
-  }
-}
 
-// Helper function to escape regex special characters
-function escapeRegExp(string: string): string {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    console.log('Database monitoring started');
+  } catch (error) {
+    console.warn('Failed to start database monitoring:', error);
   }
+};
 
 // Webhook server for n8n to trigger database syncing
-const startWebhookServer = (mainWindow: BrowserWindow) => {
+const startWebhookServer = () => {
   const PORT = 3001; // Use a different port from the main API
   
   webhookServer = http.createServer(async (req, res) => {
@@ -567,88 +409,12 @@ const startWebhookServer = (mainWindow: BrowserWindow) => {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: error.message }));
       }
-    } else if (req.method === 'POST' && url.pathname === '/sync-chapter-dynamic') {
-      try {
-        console.log('Received sync-chapter-dynamic webhook from n8n');
-        
-        // Parse request body
-        let body = '';
-        req.on('data', chunk => {
-          body += chunk.toString();
-        });
-        
-        req.on('end', async () => {
-          try {
-            const payload = JSON.parse(body);
-            
-            // Import the smartInsert function and database
-            const { smartInsert } = await import('./lib/markdownSync');
-            const { db, projectPages } = await import('./db');
-            const { eq } = await import('drizzle-orm');
-            
-            // Get current markdown
-            const result = await db.select().from(projectPages).limit(1);
-            let markdown: string;
-            
-            if (result.length > 0) {
-              markdown = result[0].markdown;
-            } else {
-              // Create default markdown if none exists
-              markdown = `# My Project
-
-## Ideas-Notes
-
-## Setting
-
-## Full Outline
-
-## Characters`;
-            }
-            
-            // Check if payload is in section/content format or full SyncPayload format
-            let syncedMarkdown: string;
-            if (payload.section && payload.content) {
-              // Handle section/content format - insert content directly into specified section
-              syncedMarkdown = insertContentIntoSection(markdown, payload.section, payload.content);
-            } else {
-              // Handle full SyncPayload format
-              syncedMarkdown = smartInsert(markdown, payload);
-            }
-            
-            // Save updated markdown
-            if (result.length > 0) {
-              await db.update(projectPages).set({ markdown: syncedMarkdown }).where(eq(projectPages.id, 1));
-            } else {
-              await db.insert(projectPages).values({ id: 1, markdown: syncedMarkdown });
-            }
-            
-            console.log('Chapter dynamic sync completed successfully');
-            console.log('Payload received:', JSON.stringify(payload, null, 2));
-            
-            // Notify renderer about the update
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.webContents.send('project-doc-updated');
-            }
-        
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, message: 'Chapter synced successfully' }));
-          } catch (parseError) {
-            console.error('Error parsing sync-chapter-dynamic payload:', parseError);
-            res.writeHead(400, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: 'Invalid JSON payload' }));
-          }
-        });
-      } catch (error) {
-        console.error('Sync-chapter-dynamic webhook failed:', error);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: error.message }));
-      }
     } else {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: 'Not found' }));
     }
   });
-  
+
   webhookServer.listen(PORT, () => {
     console.log(`Webhook server listening on port ${PORT}`);
   });
@@ -746,8 +512,8 @@ app.on('ready', () => {
     console.log('Skipping AI service startup - already managed externally');
   }
   
-  // Start the webhook server for n8n integration - will be started after window creation
-  let webhookServerStarted = false;
+  // Start the webhook server for n8n integration
+  startWebhookServer();
 
   // Initialize database with backup system
   import('./db').then(({ db, chapters, projectPages }) => {
@@ -771,8 +537,23 @@ app.on('ready', () => {
             fs.copyFileSync('writegeist.db', backupPath);
             console.log(`Database backup created: ${backupPath}`);
             
-            // Clean up old backups using unified cleanup system
-            cleanupOldBackups();
+            // Clean up old backups (keep only last 10)
+            const backupFiles = fs.readdirSync('.')
+              .filter(file => file.startsWith('writegeist_backup_') && file.endsWith('.db'))
+              .sort()
+              .reverse();
+            
+            if (backupFiles.length > 10) {
+              const filesToDelete = backupFiles.slice(10);
+              filesToDelete.forEach(file => {
+                try {
+                  fs.unlinkSync(file);
+                  console.log(`Deleted old backup: ${file}`);
+                } catch (error) {
+                  console.warn(`Could not delete old backup ${file}:`, error.message);
+                }
+              });
+            }
           }
         }
       } catch (error) {
@@ -1277,15 +1058,8 @@ app.on('ready', () => {
 ## Characters`;
         }
         
-        // Check if payload is in section/content format or full SyncPayload format
-        let syncedMarkdown: string;
-        if (payload.section && payload.content) {
-          // Handle section/content format - insert content directly into specified section
-          syncedMarkdown = insertContentIntoSection(markdown, payload.section, payload.content);
-        } else {
-          // Handle full SyncPayload format
-          syncedMarkdown = smartInsert(markdown, payload);
-        }
+        // Apply smart insertion
+        const syncedMarkdown = smartInsert(markdown, payload);
         
         // Save updated markdown
         if (result.length > 0) {
@@ -1305,7 +1079,7 @@ app.on('ready', () => {
     ipcMain.handle('sync-to-vm', async () => {
       try {
         console.log('Starting safe sync to VM...');
-        const result = await syncQueue.add(() => safeDatabaseSync('to-vm'));
+        const result = await safeDatabaseSync('to-vm');
         
         if (result.success) {
           return { success: true, message: result.message, output: result.output };
@@ -1318,64 +1092,20 @@ app.on('ready', () => {
       }
     });
 
+    // Safe VM database sync from VM to local
     ipcMain.handle('sync-from-vm', async () => {
       try {
         console.log('Starting safe sync from VM...');
-        const result = await syncQueue.add(() => safeDatabaseSync('from-vm'));
+        const result = await safeDatabaseSync('from-vm');
         
         if (result.success) {
-          return { success: true, message: result.message, output: result.output };
+          return { success: true, message: result.message };
         } else {
-          throw new Error(result.error);
+          return { success: false, error: result.error };
         }
       } catch (error) {
-        console.error('Safe VM sync failed:', error);
-        throw error;
-      }
-    });
-
-    // Manual backup cleanup handler
-    ipcMain.handle('cleanup-backups', async () => {
-      try {
-        console.log('Starting manual backup cleanup...');
-        const fs = require('fs');
-        
-        // Get count before cleanup
-        const beforeCount = fs.readdirSync('.')
-          .filter(file => 
-            (file.startsWith('writegeist_backup_') || 
-             file.startsWith('writegeist_temp_') || 
-             file.startsWith('writegeist_corrupted_') ||
-             file.startsWith('writegeist_from_vm') ||
-             file.startsWith('writegeist_latest')) && 
-            file.endsWith('.db')
-          ).length;
-        
-        cleanupOldBackups();
-        
-        // Get count after cleanup
-        const afterCount = fs.readdirSync('.')
-          .filter(file => 
-            (file.startsWith('writegeist_backup_') || 
-             file.startsWith('writegeist_temp_') || 
-             file.startsWith('writegeist_corrupted_') ||
-             file.startsWith('writegeist_from_vm') ||
-             file.startsWith('writegeist_latest')) && 
-            file.endsWith('.db')
-          ).length;
-        
-        const deletedCount = beforeCount - afterCount;
-        
-        return { 
-          success: true, 
-          message: `Cleanup completed. Deleted ${deletedCount} old backup files.`,
-          beforeCount,
-          afterCount,
-          deletedCount
-        };
-      } catch (error) {
-        console.error('Manual backup cleanup failed:', error);
-        throw error;
+        console.error('Safe VM database sync failed:', error);
+        return { success: false, error: error.message };
       }
     });
 
@@ -1396,12 +1126,6 @@ app.on('ready', () => {
     
     // Create window after database is initialized and IPC handlers are registered
     createWindow();
-    
-    // Start webhook server after window is created
-    if (!webhookServerStarted && globalMainWindow) {
-      startWebhookServer(globalMainWindow);
-      webhookServerStarted = true;
-    }
   }).catch(console.error);
 });
 
@@ -1415,34 +1139,6 @@ app.on('window-all-closed', () => {
 });
 
 // Clean up the API backend process when the app is quitting
-// Cleanup function for safe shutdown
-const performCleanupOnShutdown = async () => {
-  console.log('Performing cleanup on shutdown...');
-  
-  try {
-    // Stop any ongoing sync operations
-    if (syncMutex) {
-      console.log('Warning: Sync operation in progress during shutdown');
-    }
-    
-    // Close database file watcher
-    if (dbWatcher) {
-      dbWatcher.close();
-      console.log('Database watcher closed');
-    }
-    
-    // Create final backup
-    const backupPath = createSafeBackup('shutdown');
-    if (backupPath) {
-      console.log('Final backup created on shutdown');
-    }
-    
-    console.log('Cleanup completed successfully');
-  } catch (error) {
-    console.error('Error during cleanup:', error);
-  }
-};
-
 app.on('will-quit', () => {
   if (apiProcess) {
     console.log('Stopping API backend...');

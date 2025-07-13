@@ -98,9 +98,16 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
         event.preventDefault();
         event.stopPropagation();
         
-        // Only save if we're editing, not already saving, and have content
-        if (isEditing && !saving && content.trim()) {
+        // Save if we have content and aren't already saving
+        if (!saving && content.trim()) {
+          if (isEditing) {
+            // For editing, use directSave
           directSave();
+          } else {
+            // For new chapters, trigger the manual save
+            const manualSaveEvent = new CustomEvent('manualSave');
+            document.dispatchEvent(manualSaveEvent);
+          }
         }
       }
     };
@@ -180,20 +187,127 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
         }
       } else {
         // Creating new chapter
+        const chapterTitle = title.trim() || 'Untitled Chapter';
         const newChapter = {
-          title: title.trim() || 'Untitled Chapter',
+          title: chapterTitle,
           text: content,
           characters: [],
           locations: [],
           pov: [],
         };
         
-        await window.api.saveChapterToDB(newChapter);
+        // First save the chapter to get an ID
+        const saveResult = await window.api.saveChapterToDB(newChapter);
         
+        // Then extract metadata using the ingest API
+        try {
+          const ingestResult = await window.api.ingestChapter({
+            title: chapterTitle,
+            text: content
+          });
+          
+          // Update the chapter with extracted metadata using the returned chapter ID
+          if (ingestResult && saveResult.chapterId && (ingestResult.characters || ingestResult.locations || ingestResult.pov)) {
+            await window.api.updateChapter({
+              id: saveResult.chapterId,
+              title: chapterTitle,
+              text: content,
+              characters: ingestResult.characters || [],
+              locations: ingestResult.locations || [],
+              pov: ingestResult.pov || [],
+            });
+            
+            // Auto-populate project page with extracted metadata
+            try {
+              const autoPopulatePromises = [];
+              
+              // Add characters to project page
+              if (ingestResult.characters && ingestResult.characters.length > 0) {
+                autoPopulatePromises.push(
+                  window.api.appendCharacters(ingestResult.characters)
+                    .then((result) => {
+                      if (result.success && result.added && result.added.length > 0) {
+                        console.log('Auto-populated characters:', result.added);
+                      }
+                    })
+                    .catch((error) => {
+                      console.warn('Failed to auto-populate characters:', error);
+                    })
+                );
+              }
+              
+              // Add locations to project page
+              if (ingestResult.locations && ingestResult.locations.length > 0) {
+                autoPopulatePromises.push(
+                  window.api.appendLocations(ingestResult.locations)
+                    .then((result) => {
+                      if (result.success && result.added && result.added.length > 0) {
+                        console.log('Auto-populated locations:', result.added);
+                      }
+                    })
+                    .catch((error) => {
+                      console.warn('Failed to auto-populate locations:', error);
+                    })
+                );
+              }
+              
+              // Add summaries to project page
+              if (ingestResult.metadata && ingestResult.metadata.summary && ingestResult.metadata.summary.trim()) {
+                autoPopulatePromises.push(
+                  window.api.appendSummaries([ingestResult.metadata.summary])
+                    .then((result) => {
+                      if (result.success && result.added && result.added.length > 0) {
+                        console.log('Auto-populated summaries:', result.added);
+                      }
+                    })
+                    .catch((error) => {
+                      console.warn('Failed to auto-populate summaries:', error);
+                    })
+                );
+              }
+              
+              // Wait for all auto-population to complete
+              if (autoPopulatePromises.length > 0) {
+                await Promise.all(autoPopulatePromises);
+              }
+            } catch (autoPopulateError) {
+              console.warn('Auto-population failed:', autoPopulateError);
+              // Don't fail the entire operation if auto-population fails
+            }
+          }
+          
+          // Enhanced success message with auto-population feedback
+          let successMessage = "Chapter created and analyzed successfully.";
+          
+          // Check if auto-population happened and add to message
+          if (ingestResult && saveResult.chapterId && (ingestResult.characters || ingestResult.locations || ingestResult.pov || (ingestResult.metadata && ingestResult.metadata.summary))) {
+            const parts = [];
+            if (ingestResult.characters && ingestResult.characters.length > 0) {
+              parts.push(`${ingestResult.characters.length} character${ingestResult.characters.length > 1 ? 's' : ''}`);
+            }
+            if (ingestResult.locations && ingestResult.locations.length > 0) {
+              parts.push(`${ingestResult.locations.length} location${ingestResult.locations.length > 1 ? 's' : ''}`);
+            }
+            if (ingestResult.metadata && ingestResult.metadata.summary && ingestResult.metadata.summary.trim()) {
+              parts.push('1 summary');
+            }
+            if (parts.length > 0) {
+              successMessage += ` Added ${parts.join(', ')} to project page.`;
+            }
+          }
+          
+          toast({
+            title: "Success",
+            description: successMessage,
+          });
+        } catch (ingestError) {
+          console.error('Chapter metadata extraction failed:', ingestError);
         toast({
           title: "Success",
-          description: "Chapter created successfully.",
+            description: "Chapter created successfully. Metadata extraction failed - AI service may be unavailable.",
         });
+        }
+        
         onSave?.();
       }
     } catch (error) {
@@ -206,6 +320,18 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       setLoading(false);
     }
   };
+
+  // Listen for manual save events from Ctrl+S
+  useEffect(() => {
+    const handleManualSaveEvent = () => {
+      if (!isEditing && content.trim()) {
+        handleManualSave();
+      }
+    };
+
+    document.addEventListener('manualSave', handleManualSaveEvent);
+    return () => document.removeEventListener('manualSave', handleManualSaveEvent);
+  }, [isEditing, content, handleManualSave]);
 
   // Handle draft restoration
   const handleRestoreDraft = () => {
@@ -311,7 +437,7 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
     // Update SaveManager content but don't schedule auto-save (we'll use our own)
     saveManager.setContent(newContent);
     
-    // Schedule auto-save using directSave for consistency
+    // DISABLED: Schedule auto-save using directSave for consistency - conflicts with SaveManager
     if (isEditing) {
       // Clear existing auto-save timer
       if (autoSaveTimerRef.current) {
@@ -319,34 +445,35 @@ function ChapterEditorInner({ chapter, onSave, onCancel }: ChapterEditorProps) {
       }
       
       // Set new auto-save timer (30 seconds)
-      autoSaveTimerRef.current = setTimeout(async () => {
-        // Check if we're still in editing mode, not currently saving, and have content
-        if (isEditing && !saving && newContent.trim()) {
-          try {
-            setSaving(true);
-            
-            const updatedChapter = {
-              ...chapter,
-              text: newContent, // Use the content from when timer was set
-              characters: chapter.characters || [],
-              locations: chapter.locations || [],
-              pov: chapter.pov || [],
-            };
-            
-            await window.api.updateChapter(updatedChapter);
-            
-            // Clear any drafts after successful save
-            saveManager.clearDraft();
-            
-            setLastSavedAt(new Date());
-          } catch (error) {
-            console.error('Auto-save failed:', error);
-            setSaving(false);
-          }
-        }
-      }, 30000);
+      // DISABLED: Auto-save timer to prevent conflicts with SaveManager
+      // autoSaveTimerRef.current = setTimeout(async () => {
+      //   // Check if we're still in editing mode, not currently saving, and have content
+      //   if (isEditing && !saving && newContent.trim()) {
+      //     try {
+      //       setSaving(true);
+      //       
+      //       const updatedChapter = {
+      //         ...chapter,
+      //         text: newContent, // Use the content from when timer was set
+      //         characters: chapter.characters || [],
+      //         locations: chapter.locations || [],
+      //         pov: chapter.pov || [],
+      //       };
+      //       
+      //       await window.api.updateChapter(updatedChapter);
+      //       
+      //       // Clear any drafts after successful save
+      //       saveManager.clearDraft();
+      //       
+      //       setLastSavedAt(new Date());
+      //     } catch (error) {
+      //       console.error('Auto-save failed:', error);
+      //       setSaving(false);
+      //     }
+      //   }
+      // }, 30000);
     }
-  }, [isEditing, saveManager, chapter]);
+  }, [isEditing, saveManager, chapter, saving]);
 
   // Clean up auto-save timer on unmount
   useEffect(() => {

@@ -292,7 +292,15 @@ export const FullBook: React.FC = () => {
             ← Back to Full Book
           </Button>
         </div>
-        <ChapterIngest />
+        <ChapterIngest 
+          onSave={() => {
+            setShowIngest(false);
+            loadChapters(); // Refresh chapters when returning
+          }}
+          onCancel={() => {
+            setShowIngest(false);
+          }}
+        />
       </div>
     );
   }

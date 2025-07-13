@@ -35,6 +35,7 @@ def normalize_markdown(text: str) -> str:
     - Collapsing 3+ consecutive blank lines to 2 blank lines
     - Removing trailing whitespace from lines
     - Ensuring consistent spacing
+    - Cleaning up malformed bullet points
     """
     if not text:
         return ""
@@ -47,6 +48,25 @@ def normalize_markdown(text: str) -> str:
     
     # Remove trailing whitespace from each line
     text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)
+    
+    # Clean up malformed bullet points
+    # Remove standalone asterisks that aren't part of proper bullet points
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    for i, line in enumerate(lines):
+        # Skip standalone asterisks (lines with only * and optional whitespace)
+        if line.strip() == '*':
+            continue
+        
+        # Fix bullet points that start with multiple asterisks
+        if re.match(r'^\s*\*\s*\*\s+', line):
+            # Convert "* * content" to "* content"
+            line = re.sub(r'^\s*\*\s*\*\s+', '* ', line)
+        
+        cleaned_lines.append(line)
+    
+    text = '\n'.join(cleaned_lines)
     
     # Collapse 3+ consecutive blank lines to 2 blank lines
     # This handles multiple patterns of blank lines

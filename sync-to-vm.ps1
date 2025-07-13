@@ -52,5 +52,5 @@ try {
     exit 1
 }
 
-Write-Host "Press any key to continue..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") 
+# Non-interactive mode - no user input required
+Write-Host "Sync completed successfully!" -ForegroundColor Green 

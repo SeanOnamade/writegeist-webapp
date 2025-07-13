@@ -150,13 +150,13 @@ export function SaveManagerProvider({
       
       clearDraft();
       
-      // Auto-sync to VM after successful save (if enabled)
-      if (autoSyncEnabled) {
-        // Run VM sync in background without waiting
-        syncToVM().catch(error => {
-          console.error('Auto VM sync failed:', error);
-        });
-      }
+      // Auto-sync to VM disabled to prevent database corruption
+      // Users can manually sync via the interface when needed
+      // if (autoSyncEnabled) {
+      //   syncToVM().catch(error => {
+      //     console.error('Auto VM sync failed:', error);
+      //   });
+      // }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown save error';
       setSaveState(prev => ({

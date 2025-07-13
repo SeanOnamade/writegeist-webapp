@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Key, Server, CheckCircle, AlertCircle, ExternalLink } from 'lucide-react';
+import { Settings, Save, Key, Server, CheckCircle, AlertCircle, ExternalLink, Database, Trash2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useToast } from '../../hooks/use-toast';
@@ -13,6 +13,7 @@ export const SettingsPage: React.FC = () => {
   const [config, setConfig] = useState<Config>({ OPENAI_API_KEY: '', PORT: 8000 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [cleaningBackups, setCleaningBackups] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -59,6 +60,29 @@ export const SettingsPage: React.FC = () => {
 
   const handleInputChange = (field: keyof Config, value: string | number) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleCleanupBackups = async () => {
+    setCleaningBackups(true);
+    try {
+      const result = await (window.api as any).cleanupBackups();
+      if (result.success) {
+        toast({
+          title: 'Backup Cleanup Complete',
+          description: `${result.deletedCount} old backup files were removed. ${result.afterCount} backups remaining.`,
+        });
+      } else {
+        throw new Error('Failed to cleanup backups');
+      }
+    } catch (error) {
+      toast({
+        title: 'Cleanup Failed',
+        description: 'Failed to cleanup backup files. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCleaningBackups(false);
+    }
   };
 
   const isConfigValid = config.OPENAI_API_KEY.trim() !== '' && config.PORT > 0 && config.PORT < 65536;
@@ -145,6 +169,42 @@ export const SettingsPage: React.FC = () => {
                 <p className="text-xs text-neutral-500 mt-2">
                   Port for the local API backend (default: 8000)
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Database Management */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Database className="h-5 w-5 text-purple-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">Database Management</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-neutral-300 mb-2">Backup Cleanup</h3>
+                <p className="text-xs text-neutral-500 mb-4">
+                  Writegeist automatically creates backups during sync operations. 
+                  Clean up old backup files to save disk space. (Keeps the 15 most recent backups)
+                </p>
+                <Button
+                  onClick={handleCleanupBackups}
+                  disabled={cleaningBackups}
+                  variant="outline"
+                  className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                >
+                  {cleaningBackups ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400 mr-2"></div>
+                      Cleaning up...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clean Up Old Backups
+                    </>
+                  )}
+                </Button>
               </div>
             </div>
           </div>
