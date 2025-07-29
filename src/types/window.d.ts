@@ -26,6 +26,7 @@ declare global {
       syncFromVM: () => Promise<{ success: boolean; message?: string; error?: string }>;
       systemHealthCheck: () => Promise<{ success: boolean; healthStatus?: any; error?: string }>;
       cleanupBackups: () => Promise<{ success: boolean; message: string; beforeCount: number; afterCount: number; deletedCount: number }>;
+      onProjectDocUpdated: (callback: () => void) => () => void;
     };
   }
 }

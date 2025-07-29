@@ -18,7 +18,7 @@ window.addEventListener('keydown', (event) => {
   }
 }, { capture: true });
 
-contextBridge.exposeInMainWorld('api', {
+const api = {
   echo: async (text: string) => {
     const res = await fetch('http://127.0.0.1:8000/echo', {
       method: 'POST',
@@ -89,4 +89,10 @@ contextBridge.exposeInMainWorld('api', {
   systemHealthCheck: async () => {
     return await ipcRenderer.invoke('system-health-check');
   },
-});
+  onProjectDocUpdated: (callback: () => void) => {
+    ipcRenderer.on('project-doc-updated', callback);
+    return () => ipcRenderer.removeListener('project-doc-updated', callback);
+  },
+};
+
+contextBridge.exposeInMainWorld('api', api);

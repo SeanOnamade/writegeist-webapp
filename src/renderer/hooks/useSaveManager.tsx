@@ -294,9 +294,9 @@ export function SaveManagerProvider({
     vmSyncInProgress,
   };
 
-  // Expose SaveManager to global scope for debugging
+  // Expose SaveManager to global scope for debugging (development only)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
       (window as any).saveManager = saveManager;
     }
   }, [saveManager]);

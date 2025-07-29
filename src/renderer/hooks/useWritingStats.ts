@@ -109,7 +109,7 @@ export function useWritingStats(initialContent: string = '') {
     }));
   }, [stats.wordCount]);
 
-  // Update session duration every second
+  // Update session duration every 5 seconds (less aggressive)
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       const now = Date.now();
@@ -123,7 +123,7 @@ export function useWritingStats(initialContent: string = '') {
           ? Math.round((prev.sessionWordCount / sessionDuration) * 60)
           : 0,
       }));
-    }, 1000);
+    }, 5000); // Changed from 1000ms to 5000ms
 
     return () => {
       if (intervalRef.current) {

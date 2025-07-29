@@ -49,7 +49,7 @@ export const ProjectPage: React.FC = () => {
     }
   }, []);
 
-  const refetchMarkdown = useCallback(async () => {
+  const refetchMarkdown = useCallback(async (cloudOnly = false) => {
     if (isRefreshing) {
       console.log('Refresh already in progress, skipping...');
       return;
@@ -58,8 +58,9 @@ export const ProjectPage: React.FC = () => {
     try {
       setIsRefreshing(true);
       
-      // STEP 1: First, sync any local changes to cloud to prevent data loss
-      console.log('Syncing local changes to cloud before refresh...');
+      if (!cloudOnly) {
+        // STEP 1: First, sync any local changes to cloud to prevent data loss
+        console.log('Syncing local changes to cloud before refresh...');
       
       try {
         // Get current local content
@@ -93,6 +94,9 @@ export const ProjectPage: React.FC = () => {
       } catch (localSyncError) {
         console.warn('Failed to sync local changes to cloud before refresh:', localSyncError);
         // Continue with refresh even if local sync fails - local content is still safe
+      }
+      } else {
+        console.log('Cloud-only refresh mode - skipping local sync to preserve n8n updates');
       }
       
       // STEP 2: Now fetch the latest content from cloud (which includes our local changes)
@@ -185,10 +189,15 @@ export const ProjectPage: React.FC = () => {
       }, 3000);
     };
     
-    window.addEventListener("project-doc-updated", onUpdate);
+    // TODO: Re-enable when TypeScript types are fixed
+    // const cleanup = window.api.onProjectDocUpdated(() => {
+    //   console.log('Received IPC project-doc-updated event from n8n webhook');
+    //   refetchMarkdown(true);
+    // });
+    const cleanup = () => {}; // Temporary placeholder
     
     return () => {
-      window.removeEventListener("project-doc-updated", onUpdate);
+      cleanup();
       if (autoRefreshTimeoutRef.current) {
         clearTimeout(autoRefreshTimeoutRef.current);
       }
@@ -272,27 +281,41 @@ export const ProjectPage: React.FC = () => {
             </h1>
             <p className="text-neutral-400 text-sm">Manage your project overview and notes with inline editing</p>
           </div>
-          <button
-            onClick={refetchMarkdown}
-            disabled={isLoading || isRefreshing}
-            className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md border transition-all duration-200 hover:scale-105 ${
-              refreshPending 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500 animate-pulse' 
-                : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border-neutral-600'
-            }`}
-            title={
-              isRefreshing 
-                ? "Syncing local changes and refreshing..." 
-                : refreshPending 
-                  ? "New content available - click to refresh" 
-                  : "Refresh content (preserves local changes)"
-            }
-          >
-            <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            {isLoading ? 'Loading...' : isRefreshing ? 'Refreshing...' : refreshPending ? 'Refresh Now' : 'Refresh'}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => refetchMarkdown()}
+              disabled={isLoading || isRefreshing}
+              className={`flex items-center gap-2 px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md border transition-all duration-200 hover:scale-105 ${
+                refreshPending 
+                  ? 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500 animate-pulse' 
+                  : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white border-neutral-600'
+              }`}
+              title={
+                isRefreshing 
+                  ? "Syncing local changes and refreshing..." 
+                  : refreshPending 
+                    ? "New content available - click to refresh" 
+                    : "Refresh content (preserves local changes)"
+              }
+            >
+              <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              {isLoading ? 'Loading...' : isRefreshing ? 'Refreshing...' : refreshPending ? 'Refresh Now' : 'Refresh'}
+            </button>
+            
+            <button
+              onClick={() => refetchMarkdown(true)}
+              disabled={isLoading || isRefreshing}
+              className="flex items-center gap-2 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed rounded-md border transition-all duration-200 hover:scale-105 bg-green-800 hover:bg-green-700 text-green-300 hover:text-white border-green-600"
+              title="Refresh from cloud only (for n8n updates)"
+            >
+              <svg className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
+              </svg>
+              Cloud
+            </button>
+          </div>
         </div>
 
         <EnhancedNovelEditor 
