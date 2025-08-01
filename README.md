@@ -2,6 +2,8 @@
 
 A modern desktop application for writers to manage their books, chapters, and creative projects with AI-powered analysis.
 
+<img width="1334" height="988" alt="Screenshot 2025-07-28 190657" src="https://github.com/user-attachments/assets/9d075b3e-1456-439f-a9e6-f7f19a8a8217" />
+
 ## ✨ Features
 
 - **Chapter Management**: Create, edit, and organize your chapters with full-text search
@@ -191,3 +193,7 @@ pytest -q ai-service/tests
 
 The tests POST fixture chapters and assert that characters, locations, and summaries are extracted correctly.
 (Optionally wire this into GitHub Actions later.) 
+
+n8n workflow:
+
+<img width="970" height="399" alt="image" src="https://github.com/user-attachments/assets/7cad43d3-d714-4a11-8626-5a2ddb7079dc" />
