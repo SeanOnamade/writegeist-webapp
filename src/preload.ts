@@ -93,6 +93,15 @@ const api = {
     ipcRenderer.on('project-doc-updated', callback);
     return () => ipcRenderer.removeListener('project-doc-updated', callback);
   },
+  generateAudio: async (chapterId: string) => {
+    return await ipcRenderer.invoke('generate-audio', chapterId);
+  },
+  getAudioStatus: async (chapterId: string) => {
+    return await ipcRenderer.invoke('get-audio-status', chapterId);
+  },
+  getAllAudio: async () => {
+    return await ipcRenderer.invoke('get-all-audio');
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

@@ -1,10 +1,11 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 import re
 import sqlite3
+import asyncio
 
 # LangGraph integration - loads environment variables
 from chapter_ingest_graph import run_chapter_ingest
@@ -14,6 +15,9 @@ from utils.normalize_md import normalize_markdown, clean_html_artifacts
 
 # Vector search service for Story Query Chat
 from vector_search import VectorSearchService
+
+# TTS service for audio generation
+from tts_service import TTSService
 
 from pathlib import Path
 from dotenv import load_dotenv
@@ -51,13 +55,18 @@ load_user_config()
 
 app = FastAPI()
 
-# Add CORS middleware
+# Add CORS middleware - SECURE: Only allow localhost
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allows all origins
-    allow_credentials=True,
-    allow_methods=["*"],  # Allows all methods
-    allow_headers=["*"],  # Allows all headers
+    allow_origins=[
+        "http://localhost:3000",  # Webpack dev server
+        "http://127.0.0.1:3000",  # Webpack dev server (alt)
+        "http://localhost:9876",  # Audio server
+        "http://127.0.0.1:9876",  # Audio server (alt)
+    ],
+    allow_credentials=False,  # No credentials needed for localhost
+    allow_methods=["GET", "POST"],  # Only needed methods
+    allow_headers=["Content-Type", "Authorization"],  # Only needed headers
 )
 
 
@@ -412,18 +421,20 @@ def accept_patch(patch: Patch):
         try:
             final_markdown = normalize_markdown(updated_markdown)
         except Exception as final_norm_error:
+            print(f"[ERROR] Final document normalization failed: {str(final_norm_error)}")
             raise HTTPException(
                 status_code=500,
-                detail={"error": f"Failed to normalize final document: {str(final_norm_error)}"}
+                detail={"error": "Document processing failed"}
             )
         
         # Save the updated markdown back to the database
         try:
             save_markdown_to_database(final_markdown)
         except Exception as save_error:
+            print(f"[ERROR] Database save operation failed: {str(save_error)}")
             raise HTTPException(
                 status_code=500,
-                detail={"error": f"Failed to save to database: {str(save_error)}"}
+                detail={"error": "Failed to save changes"}
             )
         
         # Also write to temporary file for debugging
@@ -447,9 +458,10 @@ def accept_patch(patch: Patch):
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except Exception as e:
+        print(f"[ERROR] Patch processing failed: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail={"error": f"Failed to process patch: {str(e)}"},
+            detail={"error": "Failed to process request"},
         )
 
 
@@ -466,7 +478,8 @@ def load_markdown():
             return create_default_project_doc(db_path)
         
         if not os.access(db_path, os.R_OK):
-            raise Exception(f"Database file is not readable: {db_path}")
+            print(f"[ERROR] Database file not readable: {db_path}")
+            raise Exception("Database file access denied")
 
         # Connect to database with timeout and error handling
         try:
@@ -476,7 +489,8 @@ def load_markdown():
         except sqlite3.OperationalError as db_error:
             raise Exception(f"Failed to connect to database: {str(db_error)}")
         except Exception as conn_error:
-            raise Exception(f"Database connection error: {str(conn_error)}")
+            print(f"[ERROR] Database connection failed: {str(conn_error)}")
+            raise Exception("Database connection failed")
 
         try:
             # Test database integrity
@@ -504,9 +518,11 @@ def load_markdown():
             return normalized_content
 
         except sqlite3.Error as sql_error:
-            raise Exception(f"Database query error: {str(sql_error)}")
+            print(f"[ERROR] Database query failed: {str(sql_error)}")
+            raise Exception("Database query failed")
         except Exception as query_error:
-            raise Exception(f"Error executing database query: {str(query_error)}")
+            print(f"[ERROR] Database query execution failed: {str(query_error)}")
+            raise Exception("Database operation failed")
         finally:
             try:
                 conn.close()
@@ -716,6 +732,18 @@ def get_vector_search_service():
     return VectorSearchService(str(db_path))
 
 
+# Initialize TTS service (singleton pattern)
+_tts_service_instance = None
+
+def get_tts_service():
+    """Get or create TTS service instance (singleton)."""
+    global _tts_service_instance
+    if _tts_service_instance is None:
+        _tts_service_instance = TTSService()
+        # print("TTS Service singleton initialized")  # Verbose: commented out
+    return _tts_service_instance
+
+
 @app.post("/story_query_chat")
 def story_query_chat(request: StoryQueryRequest):
     """
@@ -885,6 +913,94 @@ def generate_embeddings_for_chapter(chapter_id: str):
         raise HTTPException(
             status_code=500,
             detail={"error": f"Failed to generate embeddings: {str(e)}"}
+        )
+
+
+# TTS Endpoints
+class AudioGenerateRequest(BaseModel):
+    chapter_id: str
+
+
+class AudioStatusRequest(BaseModel):
+    chapter_id: str
+
+
+@app.post("/audio/generate")
+async def generate_audio(request: AudioGenerateRequest, background_tasks: BackgroundTasks):
+    """
+    Generate audio for a chapter (runs in background).
+    """
+    try:
+        tts_service = get_tts_service()
+        
+        # Create audio record
+        audio_id = tts_service.create_audio_record(request.chapter_id)
+        
+        # Add background task to generate audio
+        background_tasks.add_task(
+            tts_service.process_chapter,
+            request.chapter_id,
+            audio_id
+        )
+        
+        return {
+            "success": True,
+            "audio_id": audio_id,
+            "message": "Audio generation started"
+        }
+    except Exception as e:
+        print(f"[ERROR] Audio generation failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to start audio generation"}
+        )
+
+
+@app.get("/audio/status/{chapter_id}")
+def get_audio_status(chapter_id: str):
+    """
+    Get audio generation status for a chapter.
+    """
+    try:
+        tts_service = get_tts_service()
+        status = tts_service.get_audio_status(chapter_id)
+        
+        if status:
+            return {
+                "success": True,
+                "audio": status
+            }
+        else:
+            return {
+                "success": False,
+                "message": "No audio found for chapter"
+            }
+    except Exception as e:
+        print(f"[ERROR] Audio status retrieval failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to get audio status"}
+        )
+
+
+@app.post("/audio/cleanup")
+def cleanup_audio_files():
+    """
+    Clean up old audio files to save disk space.
+    """
+    try:
+        tts_service = get_tts_service()
+        tts_service.cleanup_old_audio_files(keep_count=100)
+        
+        return {
+            "success": True,
+            "message": "Audio cleanup completed"
+        }
+    except Exception as e:
+        print(f"[ERROR] Audio cleanup failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to cleanup audio files"}
         )
 
 

@@ -27,6 +27,9 @@ declare global {
       systemHealthCheck: () => Promise<{ success: boolean; healthStatus?: any; error?: string }>;
       cleanupBackups: () => Promise<{ success: boolean; message: string; beforeCount: number; afterCount: number; deletedCount: number }>;
       onProjectDocUpdated: (callback: () => void) => () => void;
+      generateAudio: (chapterId: string) => Promise<any>;
+      getAudioStatus: (chapterId: string) => Promise<any>;
+      getAllAudio: () => Promise<any[]>;
     };
   }
 }

@@ -28,6 +28,16 @@ export const projectPages = sqliteTable('project_pages', {
   markdown: text('markdown').notNull(),
 });
 
+export const chapterAudio = sqliteTable('chapter_audio', {
+  id: text('id').primaryKey(),
+  chapterId: text('chapter_id').notNull(),
+  audioUrl: text('audio_url'),
+  duration: integer('duration'), // Duration in seconds
+  status: text('status').default('pending'), // pending, processing, completed, error
+  createdAt: text('created_at').$defaultFn(() => new Date().toISOString()),
+  updatedAt: text('updated_at').$defaultFn(() => new Date().toISOString()),
+});
+
 // Create tables if they don't exist
 database.exec(`
   CREATE TABLE IF NOT EXISTS projects (
@@ -50,6 +60,17 @@ database.exec(`
   CREATE TABLE IF NOT EXISTS project_pages (
     id INTEGER PRIMARY KEY,
     markdown TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS chapter_audio (
+    id TEXT PRIMARY KEY,
+    chapter_id TEXT NOT NULL,
+    audio_url TEXT,
+    duration INTEGER,
+    status TEXT DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (chapter_id) REFERENCES chapters(id) ON DELETE CASCADE
   );
 `);
 

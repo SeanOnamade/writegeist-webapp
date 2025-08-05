@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Save, Key, Server, CheckCircle, AlertCircle, ExternalLink, Database, Trash2 } from 'lucide-react';
+import { Settings, Save, Key, Server, CheckCircle, AlertCircle, ExternalLink, Database, Trash2, Volume2 } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { useToast } from '../../hooks/use-toast';
@@ -7,10 +7,21 @@ import { useToast } from '../../hooks/use-toast';
 interface Config {
   OPENAI_API_KEY: string;
   PORT: number;
+  TTS_PROVIDER: 'openai' | 'elevenlabs';
+  TTS_MODEL: string;
+  TTS_VOICE: string;
+  ELEVENLABS_API_KEY?: string;
 }
 
 export const SettingsPage: React.FC = () => {
-  const [config, setConfig] = useState<Config>({ OPENAI_API_KEY: '', PORT: 8000 });
+  const [config, setConfig] = useState<Config>({ 
+    OPENAI_API_KEY: '', 
+    PORT: 8000,
+    TTS_PROVIDER: 'openai',
+    TTS_MODEL: 'tts-1',
+    TTS_VOICE: 'alloy',
+    ELEVENLABS_API_KEY: ''
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cleaningBackups, setCleaningBackups] = useState(false);
@@ -23,7 +34,14 @@ export const SettingsPage: React.FC = () => {
   const loadConfig = async () => {
     try {
       const loadedConfig = await window.api.getConfig();
-      setConfig(loadedConfig);
+      setConfig({
+        OPENAI_API_KEY: loadedConfig.OPENAI_API_KEY || '',
+        PORT: loadedConfig.PORT || 8000,
+        TTS_PROVIDER: loadedConfig.TTS_PROVIDER || 'openai',
+        TTS_MODEL: loadedConfig.TTS_MODEL || 'tts-1',
+        TTS_VOICE: loadedConfig.TTS_VOICE || 'alloy',
+        ELEVENLABS_API_KEY: loadedConfig.ELEVENLABS_API_KEY || ''
+      });
     } catch (error) {
       toast({
         title: 'Error',
@@ -38,6 +56,7 @@ export const SettingsPage: React.FC = () => {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
+      // Save all config including TTS settings
       const result = await window.api.saveConfig(config);
       if (result.success) {
         toast({
@@ -85,7 +104,8 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
-  const isConfigValid = config.OPENAI_API_KEY.trim() !== '' && config.PORT > 0 && config.PORT < 65536;
+  const isConfigValid = config.OPENAI_API_KEY.trim() !== '' && config.PORT > 0 && config.PORT < 65536 &&
+    (config.TTS_PROVIDER === 'openai' || (config.TTS_PROVIDER === 'elevenlabs' && config.ELEVENLABS_API_KEY?.trim() !== ''));
 
   if (loading) {
     return (
@@ -143,6 +163,92 @@ export const SettingsPage: React.FC = () => {
                   </a>
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* TTS Configuration */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Volume2 className="h-5 w-5 text-purple-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">Text-to-Speech Configuration</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                  TTS Provider
+                </label>
+                <select
+                  value={config.TTS_PROVIDER}
+                  onChange={(e) => handleInputChange('TTS_PROVIDER', e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                >
+                  <option value="openai">OpenAI TTS</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                </select>
+              </div>
+
+              {config.TTS_PROVIDER === 'openai' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      Model
+                    </label>
+                    <select
+                      value={config.TTS_MODEL}
+                      onChange={(e) => handleInputChange('TTS_MODEL', e.target.value)}
+                      className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                    >
+                      <option value="tts-1">TTS-1 (Faster, Lower Quality)</option>
+                      <option value="tts-1-hd">TTS-1-HD (Slower, Higher Quality)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      Voice
+                    </label>
+                    <select
+                      value={config.TTS_VOICE}
+                      onChange={(e) => handleInputChange('TTS_VOICE', e.target.value)}
+                      className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                    >
+                      <option value="alloy">Alloy (Neutral)</option>
+                      <option value="echo">Echo (Male)</option>
+                      <option value="fable">Fable (British)</option>
+                      <option value="onyx">Onyx (Deep Male)</option>
+                      <option value="nova">Nova (Female)</option>
+                      <option value="shimmer">Shimmer (Soft Female)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {config.TTS_PROVIDER === 'elevenlabs' && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    ElevenLabs API Key
+                  </label>
+                  <Input
+                    type="password"
+                    value={config.ELEVENLABS_API_KEY || ''}
+                    onChange={(e) => handleInputChange('ELEVENLABS_API_KEY', e.target.value)}
+                    placeholder="xi-..."
+                    className="bg-neutral-800 border-neutral-700 text-neutral-100 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
+                    Get your API key from{' '}
+                    <a 
+                      href="https://elevenlabs.io/api" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 hover:underline"
+                    >
+                      ElevenLabs Dashboard
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 

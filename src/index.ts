@@ -17,6 +17,8 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+
+
 // Track the API backend process
 let apiProcess: any;
 
@@ -124,6 +126,7 @@ const createWindow = (): void => {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
       nodeIntegration: false,
       contextIsolation: true,
+      // webSecurity: true (default) - Secure by default
     },
   });
 
@@ -136,7 +139,9 @@ const createWindow = (): void => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 https://n8n-writegeist-u50080.vm.elestio.app https://python-fastapi-u50080.vm.elestio.app; script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                    process.env.NODE_ENV === 'development' || !app.isPackaged
+                      ? "default-src 'self' 'unsafe-inline' 'unsafe-eval'; connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:9876 http://localhost:8000 ws://localhost:3000 ws://0.0.0.0:3000 https://n8n-writegeist-u50080.vm.elestio.app https://python-fastapi-u50080.vm.elestio.app; script-src 'self' 'unsafe-inline' 'unsafe-eval'; media-src 'self' http://127.0.0.1:9876;"
+                      : "default-src 'self'; connect-src 'self' http://127.0.0.1:8000 http://127.0.0.1:9876 https://n8n-writegeist-u50080.vm.elestio.app https://python-fastapi-u50080.vm.elestio.app; script-src 'self'; media-src 'self' http://127.0.0.1:9876;"
         ]
       }
     });
@@ -145,8 +150,10 @@ const createWindow = (): void => {
   // and load the index.html of the app.
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // Open the DevTools only in development
+  if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
+    mainWindow.webContents.openDevTools();
+  }
 
   // Start database monitoring
   const dbPath = path.join(process.cwd(), 'writegeist.db');
@@ -733,10 +740,109 @@ const performSystemHealthCheck = async () => {
   }
 };
 
+// Start a secure HTTP server to serve audio files
+let audioServer: any = null;
+const startAudioServer = () => {
+  const audioDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Writegeist', 'audio');
+  const port = 9876; // Fixed port for audio server
+  
+  audioServer = http.createServer((req: any, res: any) => {
+    // Enable CORS for localhost only
+    res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    if (req.method === 'OPTIONS') {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+    
+    if (req.method !== 'GET') {
+      res.writeHead(405);
+      res.end('Method Not Allowed');
+      return;
+    }
+    
+    // Parse the URL and extract filename
+    const url = new URL(req.url, `http://localhost:${port}`);
+    const filename = path.basename(url.pathname);
+    
+    // Security: Only allow specific audio file extensions
+    if (!/\.(mp3|wav|ogg|m4a)$/i.test(filename)) {
+      res.writeHead(400);
+      res.end('Invalid file type');
+      return;
+    }
+    
+    // Security: Prevent path traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      res.writeHead(400);
+      res.end('Invalid filename');
+      return;
+    }
+    
+    const filePath = path.join(audioDir, filename);
+    
+    // Security: Ensure file is within audio directory
+    if (!filePath.startsWith(audioDir)) {
+      res.writeHead(403);
+      res.end('Access denied');
+      return;
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      res.writeHead(404);
+      res.end('File not found');
+      return;
+    }
+    
+    // Serve the audio file with proper headers
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Accept-Ranges', 'bytes');
+    
+    // Handle range requests for seeking
+    const stat = fs.statSync(filePath);
+    const range = req.headers.range;
+    
+    if (range) {
+      const parts = range.replace(/bytes=/, "").split("-");
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : stat.size - 1;
+      const chunksize = (end - start) + 1;
+      
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${end}/${stat.size}`,
+        'Content-Length': chunksize,
+      });
+      
+      const stream = fs.createReadStream(filePath, { start, end });
+      stream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': stat.size,
+      });
+      fs.createReadStream(filePath).pipe(res);
+    }
+  });
+  
+  audioServer.listen(port, '127.0.0.1', () => {
+    console.log(`Secure audio server running at http://127.0.0.1:${port}`);
+  });
+  
+  audioServer.on('error', (err: any) => {
+    console.error('Audio server error:', err);
+  });
+};
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.on('ready', () => {
+  // Start secure audio server
+  startAudioServer();
+  
   // Check if AI service is already running (e.g., from start-with-ai.js)
   // If SKIP_AI_SERVICE env var is set, don't start our own AI service
   if (!process.env.SKIP_AI_SERVICE) {
@@ -838,6 +944,28 @@ app.on('ready', () => {
           console.log(`Chapter save backup created: ${backupPath}`);
         } catch (backupError) {
           console.warn('Could not create chapter save backup:', backupError.message);
+        }
+        
+        // Trigger audio generation in background (non-blocking)
+        try {
+          // Check if audio already exists for this chapter
+          const { chapterAudio } = require('./db');
+          const existingAudio = await db.select().from(chapterAudio)
+            .where(eq(chapterAudio.chapterId, chapterId))
+            .limit(1);
+          
+          // Only generate if no audio exists or if the last attempt failed
+          if (existingAudio.length === 0 || existingAudio[0].status === 'error') {
+            fetch('http://localhost:8000/audio/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chapter_id: chapterId }),
+            }).catch(error => {
+              console.log('Audio generation request failed (non-critical):', error.message);
+            });
+          }
+        } catch (audioError) {
+          console.log('Could not trigger audio generation (non-critical):', audioError.message);
         }
         
         return { success: true, chapterId };
@@ -1390,6 +1518,57 @@ app.on('ready', () => {
       }
     });
 
+    // Audio IPC handlers
+    ipcMain.handle('generate-audio', async (event, chapterId) => {
+      try {
+        const response = await fetch('http://localhost:8000/audio/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chapter_id: chapterId }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        console.error('Error generating audio:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('get-audio-status', async (event, chapterId) => {
+      try {
+        const response = await fetch(`http://localhost:8000/audio/status/${chapterId}`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        console.error('Error getting audio status:', error);
+        throw error;
+      }
+    });
+    
+    ipcMain.handle('get-all-audio', async () => {
+      try {
+        const { chapterAudio } = require('./db');
+        const result = await db.select().from(chapterAudio).orderBy(chapterAudio.createdAt);
+        return result;
+      } catch (error) {
+        console.error('Error getting all audio:', error);
+        return [];
+      }
+    });
+
     // Start database monitoring after initialization
     const dbPath = path.join(process.cwd(), 'writegeist.db');
     // We'll start monitoring once the window is created
@@ -1454,6 +1633,12 @@ app.on('will-quit', () => {
     console.log('Stopping webhook server...');
     webhookServer.close();
     webhookServer = null;
+  }
+  
+  if (audioServer) {
+    console.log('Stopping audio server...');
+    audioServer.close();
+    audioServer = null;
   }
 });
 
