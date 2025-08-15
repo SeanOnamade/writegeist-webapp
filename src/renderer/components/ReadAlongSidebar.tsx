@@ -243,12 +243,13 @@ export const ReadAlongSidebar: React.FC<ReadAlongSidebarProps> = ({
   // Save calibration points to localStorage when they change
   useEffect(() => {
     if (calibrationPoints.length > 0) {
+      const dataToSave = {
+        points: calibrationPoints,
+        lastSync: lastSyncTime,
+        version: 1 // For future compatibility
+      };
+      
       try {
-        const dataToSave = {
-          points: calibrationPoints,
-          lastSync: lastSyncTime,
-          version: 1 // For future compatibility
-        };
         localStorage.setItem(calibrationKey, JSON.stringify(dataToSave));
       } catch (error) {
         console.warn('Failed to save calibration data:', error);
