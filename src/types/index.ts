@@ -32,14 +32,25 @@ declare global {
     api: {
       echo: (text: string) => Promise<string>;
       ingestChapter: (payload: { title: string; text: string }) => Promise<any>;
-      saveChapterToDB: (chapter: any) => Promise<void>;
+      saveChapterToDB: (chapter: any) => Promise<{ success: boolean; chapterId?: string; audioGenerationStarted?: boolean }>;
       getChapters: () => Promise<Chapter[]>;
       deleteChapter: (id: string) => Promise<void>;
       getProjectDoc: () => Promise<string>;
       saveProjectDoc: (markdown: string) => Promise<void>;
-      appendCharacters: (chars: string[]) => Promise<void>;
+      appendCharacters: (chars: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
+      appendLocations: (locations: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
+      appendSummaries: (summaries: string[]) => Promise<{ success: boolean; added?: string[]; message?: string; error?: string }>;
       updateChapter: (chapter: any) => Promise<void>;
       syncChapterDynamic: (result: SyncPayload) => Promise<{ success: boolean }>;
+      getConfig: () => Promise<any>;
+      saveConfig: (config: any) => Promise<{ success: boolean }>;
+      registerGlobalSaveHandler: (handler: () => void) => void;
+      unregisterGlobalSaveHandler: () => void;
+      generateAudio: (chapterId: string) => Promise<any>;
+      getAudioStatus: (chapterId: string) => Promise<any>;
+      getAllAudio: () => Promise<any[]>;
+      onBackgroundAudioGenerationStarted: (callback: (data: { chapterId: string; chapterTitle: string }) => void) => () => void;
+      onBackgroundAudioGenerationFailed: (callback: (data: { chapterId: string; chapterTitle: string; error: string }) => void) => () => void;
     };
   }
 } 

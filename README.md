@@ -4,6 +4,27 @@ A modern desktop application for writers to manage their books, chapters, and cr
 
 <img width="1334" height="988" alt="Screenshot 2025-07-28 190657" src="https://github.com/user-attachments/assets/9d075b3e-1456-439f-a9e6-f7f19a8a8217" />
 
+## 🚀 Production Ready
+
+**Writegeist Desktop is now fully deployable!** The application packages into a single-click installer that includes:
+
+- **Bundled FastAPI Backend**: No Python installation required for end users
+- **Configuration Management**: User-friendly settings page for API keys
+- **SQLite Database**: Local data storage with full persistence
+- **Cross-Platform Installer**: Currently supports Windows with Squirrel
+
+### For End Users
+
+📥 **Download**: Get the latest installer from [Releases](../../releases)  
+📖 **Setup Guide**: See [USER_GUIDE.md](./USER_GUIDE.md) for installation and usage instructions  
+⚙️ **Requirements**: Just your OpenAI API key - everything else is included!
+
+### For Developers
+
+🔧 **Build**: `npm run make` creates the installer  
+🤖 **CI/CD**: GitHub Actions automatically builds on every push  
+📦 **Architecture**: Electron frontend + bundled FastAPI backend
+
 ## ✨ Features
 
 - **Chapter Management**: Create, edit, and organize your chapters with full-text search
@@ -22,6 +43,13 @@ A modern desktop application for writers to manage their books, chapters, and cr
 - **Project Markdown Editing**: Notion-style project hub with markdown editing for Ideas/Notes, Setting, Full Outline, and Characters
 - **Local Database**: SQLite storage with Drizzle ORM
 - **Cross-Platform**: Built with Electron for Windows, macOS, and Linux
+- **Rich Text Editor**: Powered by TipTap with real-time markdown shortcuts
+- **Project Management**: Organize chapters, characters, settings, and outlines
+- **Character & Location Tracking**: Automatically extract and organize story elements
+- **Chapter Editor**: Write and edit individual chapters with character/location sync
+- **Project now auto-saves with toast notifications & consistent markdown bullets**: Enhanced UX with visual save feedback and standardized asterisk bullet formatting
+- **Database Storage**: Local SQLite database for reliable data persistence
+- **Modern UI**: Dark theme with responsive design using Tailwind CSS
 
 ## Setup
 
@@ -80,6 +108,7 @@ Before running the AI service, you need to configure your OpenAI API key:
 The AI service runs at http://127.0.0.1:8000 with endpoints:
 - POST `/echo` - Echo service
 - POST `/ingest_chapter` - OpenAI GPT-4o powered chapter analysis and metadata extraction
+- GET `/project/section/{section_name}` - Extract specific sections from project markdown file
 
 ## File Structure
 
@@ -192,8 +221,22 @@ pytest -q ai-service/tests
 ```
 
 The tests POST fixture chapters and assert that characters, locations, and summaries are extracted correctly.
-(Optionally wire this into GitHub Actions later.) 
+(Optionally wire this into GitHub Actions later.)
 
-n8n workflow:
+### ✏️ Inline Novel Editor
+
+The Project page now uses the **Novel** (TipTap-based) editor for seamless inline editing.
+
+- **WYSIWYG Editing**: Rich text editor with markdown support
+- **Keyboard Shortcuts**: `⌘/Ctrl + B` for bold, `##` + space for H2, etc.
+- **Auto-save**: Content saves automatically every second to SQLite
+- **Markdown Compatible**: Seamless conversion between markdown and rich text
+- **Dark Theme**: Integrated styling that matches the app's dark theme
+- **Real-time Updates**: Listens for external document changes and updates editor content
+- **ProseMirror-based**: Built on the reliable ProseMirror editing framework
+
+The editor eliminates the need for separate edit/preview modes, providing a modern writing experience similar to Notion or other contemporary writing tools.
+
+### 🔗 n8n Workflow Integration
 
 <img width="970" height="399" alt="image" src="https://github.com/user-attachments/assets/7cad43d3-d714-4a11-8626-5a2ddb7079dc" />

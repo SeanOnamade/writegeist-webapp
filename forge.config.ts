@@ -14,9 +14,25 @@ import { rendererConfig } from './webpack.renderer.config';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    icon: './resources/logo', // no file extension required
+    extraResource: [
+      './resources'
+    ],
   },
   rebuildConfig: {},
-  makers: [new MakerSquirrel({}), new MakerZIP({}, ['darwin']), new MakerRpm({}), new MakerDeb({})],
+  makers: [
+    new MakerSquirrel({
+      // Windows installer icon
+      setupIcon: './resources/logo.ico'
+    }), 
+    new MakerZIP({}, ['darwin']), 
+    new MakerRpm({}), 
+    new MakerDeb({
+      options: {
+        icon: './resources/logo.ico'
+      }
+    })
+  ],
   plugins: [
     new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({

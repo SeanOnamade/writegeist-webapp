@@ -1,0 +1,35 @@
+version: "3.8"
+
+services:
+  fastapi:
+    image: python:3.11-slim
+    working_dir: /srv/app
+    command: >
+      bash -c "
+        pip install --no-cache-dir -r requirements.txt &&
+        uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+      "
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "5000:8000"
+    volumes:
+      # Mount the entire ai-service directory as the app directory
+      - ./ai-service:/srv/app
+      # Mount the database file from the project root
+      - ./writegeist.db:/srv/writegeist.db
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.fastapi.rule=Host(`python-fastapi-u50080.vm.elestio.app`)"
+      - "traefik.http.routers.fastapi.entrypoints=websecure"
+      - "traefik.http.services.fastapi.loadbalancer.server.port=8000"
+
+  mongo:
+    image: mongo:6
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

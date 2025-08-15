@@ -1,25 +1,371 @@
-import React from 'react';
-import { Settings } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Settings, Save, Key, Server, CheckCircle, AlertCircle, ExternalLink, Database, Trash2, Volume2 } from 'lucide-react';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { useToast } from '../../hooks/use-toast';
+
+interface Config {
+  OPENAI_API_KEY: string;
+  PORT: number;
+  TTS_PROVIDER: 'openai' | 'elevenlabs';
+  TTS_MODEL: string;
+  TTS_VOICE: string;
+  ELEVENLABS_API_KEY?: string;
+}
 
 export const SettingsPage: React.FC = () => {
+  const [config, setConfig] = useState<Config>({ 
+    OPENAI_API_KEY: '', 
+    PORT: 8000,
+    TTS_PROVIDER: 'openai',
+    TTS_MODEL: 'tts-1',
+    TTS_VOICE: 'alloy',
+    ELEVENLABS_API_KEY: ''
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [cleaningBackups, setCleaningBackups] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadConfig();
+  }, []);
+
+  const loadConfig = async () => {
+    try {
+      const loadedConfig = await window.api.getConfig();
+      setConfig({
+        OPENAI_API_KEY: loadedConfig.OPENAI_API_KEY || '',
+        PORT: loadedConfig.PORT || 8000,
+        TTS_PROVIDER: loadedConfig.TTS_PROVIDER || 'openai',
+        TTS_MODEL: loadedConfig.TTS_MODEL || 'tts-1',
+        TTS_VOICE: loadedConfig.TTS_VOICE || 'alloy',
+        ELEVENLABS_API_KEY: loadedConfig.ELEVENLABS_API_KEY || ''
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to load configuration',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveConfig = async () => {
+    setSaving(true);
+    try {
+      // Save all config including TTS settings
+      const result = await window.api.saveConfig(config);
+      if (result.success) {
+        toast({
+          title: 'Settings Saved',
+          description: 'Configuration saved successfully. API backend is restarting...',
+        });
+      } else {
+        throw new Error('Failed to save config');
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save configuration',
+        variant: 'destructive',
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleInputChange = (field: keyof Config, value: string | number) => {
+    setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleCleanupBackups = async () => {
+    setCleaningBackups(true);
+    try {
+      const result = await (window.api as any).cleanupBackups();
+      if (result.success) {
+        toast({
+          title: 'Backup Cleanup Complete',
+          description: `${result.deletedCount} old backup files were removed. ${result.afterCount} backups remaining.`,
+        });
+      } else {
+        throw new Error('Failed to cleanup backups');
+      }
+    } catch (error) {
+      toast({
+        title: 'Cleanup Failed',
+        description: 'Failed to cleanup backup files. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setCleaningBackups(false);
+    }
+  };
+
+  const isConfigValid = config.OPENAI_API_KEY.trim() !== '' && config.PORT > 0 && config.PORT < 65536 &&
+    (config.TTS_PROVIDER === 'openai' || (config.TTS_PROVIDER === 'elevenlabs' && config.ELEVENLABS_API_KEY?.trim() !== ''));
+
+  if (loading) {
+    return (
+      <div className="flex-1 p-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-neutral-400">Loading settings...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 p-6">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
+    <div className="flex-1 p-8">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-3 mb-8">
           <Settings className="h-6 w-6 text-neutral-400" />
           <div>
             <h1 className="text-2xl font-bold text-neutral-100">Settings</h1>
-            <p className="text-neutral-400 text-sm">Configure your writing environment</p>
+            <p className="text-neutral-400">Configure your writing environment</p>
           </div>
         </div>
         
-        <div className="bg-neutral-800 rounded-lg p-8 text-center">
-          <Settings className="h-12 w-12 text-neutral-600 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-neutral-300 mb-2">Coming Soon</h3>
-          <p className="text-neutral-500">
-            Settings and preferences will be available here. Configure themes, AI settings, 
-            export options, and more.
-          </p>
+        <div className="space-y-8">
+          {/* API Configuration */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Key className="h-5 w-5 text-blue-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">API Configuration</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                  OpenAI API Key
+                </label>
+                <Input
+                  type="password"
+                  value={config.OPENAI_API_KEY}
+                  onChange={(e) => handleInputChange('OPENAI_API_KEY', e.target.value)}
+                  placeholder="sk-..."
+                  className="bg-neutral-800 border-neutral-700 text-neutral-100 focus:border-blue-500"
+                />
+                <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
+                  Get your API key from{' '}
+                  <a 
+                    href="https://platform.openai.com/api-keys" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 hover:underline"
+                  >
+                    OpenAI Platform
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* TTS Configuration */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Volume2 className="h-5 w-5 text-purple-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">Text-to-Speech Configuration</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                  TTS Provider
+                </label>
+                <select
+                  value={config.TTS_PROVIDER}
+                  onChange={(e) => handleInputChange('TTS_PROVIDER', e.target.value)}
+                  className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                >
+                  <option value="openai">OpenAI TTS</option>
+                  <option value="elevenlabs">ElevenLabs</option>
+                </select>
+              </div>
+
+              {config.TTS_PROVIDER === 'openai' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      Model
+                    </label>
+                    <select
+                      value={config.TTS_MODEL}
+                      onChange={(e) => handleInputChange('TTS_MODEL', e.target.value)}
+                      className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                    >
+                      <option value="tts-1">TTS-1 (Faster, Lower Quality)</option>
+                      <option value="tts-1-hd">TTS-1-HD (Slower, Higher Quality)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-neutral-300 mb-2">
+                      Voice
+                    </label>
+                    <select
+                      value={config.TTS_VOICE}
+                      onChange={(e) => handleInputChange('TTS_VOICE', e.target.value)}
+                      className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-md px-3 py-2 focus:border-blue-500"
+                    >
+                      <option value="alloy">Alloy (Neutral)</option>
+                      <option value="echo">Echo (Male)</option>
+                      <option value="fable">Fable (British)</option>
+                      <option value="onyx">Onyx (Deep Male)</option>
+                      <option value="nova">Nova (Female)</option>
+                      <option value="shimmer">Shimmer (Soft Female)</option>
+                    </select>
+                  </div>
+                </>
+              )}
+
+              {config.TTS_PROVIDER === 'elevenlabs' && (
+                <div>
+                  <label className="block text-sm font-medium text-neutral-300 mb-2">
+                    ElevenLabs API Key
+                  </label>
+                  <Input
+                    type="password"
+                    value={config.ELEVENLABS_API_KEY || ''}
+                    onChange={(e) => handleInputChange('ELEVENLABS_API_KEY', e.target.value)}
+                    placeholder="xi-..."
+                    className="bg-neutral-800 border-neutral-700 text-neutral-100 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-neutral-500 mt-2 flex items-center gap-1">
+                    Get your API key from{' '}
+                    <a 
+                      href="https://elevenlabs.io/api" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-blue-400 hover:text-blue-300 inline-flex items-center gap-1 hover:underline"
+                    >
+                      ElevenLabs Dashboard
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Server Configuration */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Server className="h-5 w-5 text-green-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">Server Configuration</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-neutral-300 mb-2">
+                  Backend Port
+                </label>
+                <Input
+                  type="number"
+                  value={config.PORT}
+                  onChange={(e) => handleInputChange('PORT', parseInt(e.target.value) || 8000)}
+                  min="1"
+                  max="65535"
+                  className="bg-neutral-800 border-neutral-700 text-neutral-100 focus:border-blue-500"
+                />
+                <p className="text-xs text-neutral-500 mt-2">
+                  Port for the local API backend (default: 8000)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Database Management */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center gap-3 mb-6">
+              <Database className="h-5 w-5 text-purple-400" />
+              <h2 className="text-lg font-semibold text-neutral-100">Database Management</h2>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-medium text-neutral-300 mb-2">Backup Cleanup</h3>
+                <p className="text-xs text-neutral-500 mb-4">
+                  Writegeist automatically creates backups during sync operations. 
+                  Clean up old backup files to save disk space. (Keeps the 15 most recent backups)
+                </p>
+                <Button
+                  onClick={handleCleanupBackups}
+                  disabled={cleaningBackups}
+                  variant="outline"
+                  className="bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                >
+                  {cleaningBackups ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-400 mr-2"></div>
+                      Cleaning up...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Clean Up Old Backups
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Section */}
+          <div className="bg-neutral-900/50 rounded-lg p-6 border border-neutral-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {isConfigValid ? (
+                  <>
+                    <CheckCircle className="h-5 w-5 text-green-400" />
+                    <div>
+                      <span className="text-neutral-200 font-medium">Configuration is valid</span>
+                      <p className="text-xs text-neutral-500 mt-1">Ready to save changes</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-5 w-5 text-yellow-400" />
+                    <div>
+                      <span className="text-neutral-200 font-medium">Configuration incomplete</span>
+                      <p className="text-xs text-neutral-500 mt-1">Please configure your API key</p>
+                    </div>
+                  </>
+                )}
+              </div>
+              
+              <Button
+                onClick={handleSaveConfig}
+                disabled={saving || !isConfigValid}
+                className="bg-blue-600 hover:bg-blue-700 text-white disabled:bg-neutral-700 disabled:text-neutral-400"
+                size="lg"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Settings
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {saving && (
+              <div className="mt-4 p-3 bg-blue-950/20 rounded-md border border-blue-800/20">
+                <p className="text-sm text-blue-400">
+                  Saving configuration and restarting API backend...
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

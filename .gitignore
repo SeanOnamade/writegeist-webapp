@@ -35,12 +35,18 @@ build/Release
 # Dependency directories
 node_modules/
 
-# Database
+# Database files
 writegeist.db
+*.db
+*.db-shm
+*.db-wal
+writegeist_*.db
 
-# Python virtual environment
+# Python virtual environment and cache
 .venv/
 __pycache__/
+*.pyc
+*.pyo
 jspm_packages/
 
 # TypeScript v1 declaration files
@@ -97,3 +103,35 @@ typings/
 
 # Electron-Forge
 out/
+
+# Debug and test files
+test_*.py
+test_*.js
+test_*.ps1
+check_*.py
+check_*.js
+debug_*.py
+debug_*.js
+*_debug.*
+
+# Temporary and development files
+temp_*.txt
+temp_*.js
+temp_*.py
+temp_*.ps1
+restore-backup.js
+*.backup
+*.tmp
+*.temp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

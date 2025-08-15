@@ -74,10 +74,9 @@ def extract_characters_node(state: ChapterState) -> ChapterState:
         }
     except Exception as e:
         # Fallback to simple extraction if OpenAI fails
-        error_msg = f"Character extraction failed: {e}"
-        print(error_msg, flush=True)
+        print(f"[ERROR] Character extraction failed: {str(e)}", flush=True)
         characters = []
-        log_entry += f" - ERROR: {error_msg}"
+        log_entry += f" - ERROR: Character extraction failed"
         return {
             **state,
             "characters": characters,
