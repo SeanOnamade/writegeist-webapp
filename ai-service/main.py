@@ -1004,6 +1004,54 @@ def cleanup_audio_files():
         )
 
 
+@app.delete("/audio/cleanup/{chapter_id}")
+def cleanup_audio_for_chapter(chapter_id: str):
+    """
+    Clean up audio files for a specific deleted chapter.
+    """
+    try:
+        tts_service = get_tts_service()
+        
+        # Get audio info before cleanup
+        audio_data = tts_service.get_audio_status(chapter_id)
+        
+        if audio_data and audio_data.get('audio_url'):
+            audio_path = Path(audio_data['audio_url'])
+            
+            # Delete the audio file if it exists
+            if audio_path.exists():
+                audio_path.unlink()
+                print(f"Audio file deleted: {audio_path}")
+            
+            # Delete database record (should already be handled by CASCADE, but being explicit)
+            conn = sqlite3.connect(tts_service.db_path)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM chapter_audio WHERE chapter_id = ?", (chapter_id,))
+            deleted_count = cursor.rowcount
+            conn.commit()
+            conn.close()
+            
+            return {
+                "success": True,
+                "message": f"Audio cleaned up for chapter {chapter_id}",
+                "deleted_file": str(audio_path),
+                "deleted_records": deleted_count
+            }
+        else:
+            return {
+                "success": True,
+                "message": f"No audio found for chapter {chapter_id}",
+                "deleted_records": 0
+            }
+            
+    except Exception as e:
+        print(f"[ERROR] Audio cleanup for chapter {chapter_id} failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "Failed to cleanup audio for chapter"}
+        )
+
+
 def create_default_project_markdown():
     """Create default project markdown structure"""
     return """# My Project

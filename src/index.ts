@@ -742,9 +742,9 @@ const performSystemHealthCheck = async () => {
 
 // Start a secure HTTP server to serve audio files
 let audioServer: any = null;
-const startAudioServer = () => {
+const startAudioServer = (retryPort = 9876) => {
   const audioDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Writegeist', 'audio');
-  const port = 9876; // Fixed port for audio server
+  const port = retryPort;
   
   audioServer = http.createServer((req: any, res: any) => {
     // Enable CORS for localhost only
@@ -832,7 +832,16 @@ const startAudioServer = () => {
   });
   
   audioServer.on('error', (err: any) => {
-    console.error('Audio server error:', err);
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`Port ${port} is in use, trying next port...`);
+      if (retryPort < 9886) { // Try up to 10 ports
+        startAudioServer(retryPort + 1);
+      } else {
+        console.error('Could not find available port for audio server');
+      }
+    } else {
+      console.error('Audio server error:', err);
+    }
   });
 };
 
@@ -947,6 +956,7 @@ app.on('ready', () => {
         }
         
         // Trigger audio generation in background (non-blocking)
+        let audioGenerationStarted = false;
         try {
           // Check if audio already exists for this chapter
           const { chapterAudio } = require('./db');
@@ -956,19 +966,51 @@ app.on('ready', () => {
           
           // Only generate if no audio exists or if the last attempt failed
           if (existingAudio.length === 0 || existingAudio[0].status === 'error') {
-            fetch('http://localhost:8000/audio/generate', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chapter_id: chapterId }),
-            }).catch(error => {
-              console.log('Audio generation request failed (non-critical):', error.message);
-            });
+            // Validate chapter text before attempting TTS generation
+            const chapterText = chapter.text?.trim();
+            if (!chapterText || chapterText.length < 10) {
+              console.log('Skipping audio generation for chapter with insufficient text:', chapterId);
+            } else {
+              audioGenerationStarted = true;
+              console.log(`Starting background audio generation for chapter: ${chapterId}`);
+              
+              // Notify renderer that background audio generation started
+              event.sender.send('background-audio-generation-started', {
+                chapterId,
+                chapterTitle: chapter.title
+              });
+              
+              // Add timeout to audio generation request
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+              
+              fetch('http://localhost:8000/audio/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chapter_id: chapterId }),
+                signal: controller.signal
+              }).then(() => {
+                clearTimeout(timeoutId);
+              }).catch(error => {
+                clearTimeout(timeoutId);
+                const errorMessage = error.name === 'AbortError' 
+                  ? 'Audio generation timed out' 
+                  : error.message;
+                console.log('Audio generation request failed (non-critical):', errorMessage);
+                // Notify renderer that generation failed
+                event.sender.send('background-audio-generation-failed', {
+                  chapterId,
+                  chapterTitle: chapter.title,
+                  error: errorMessage
+                });
+              });
+            }
           }
         } catch (audioError) {
           console.log('Could not trigger audio generation (non-critical):', audioError.message);
         }
         
-        return { success: true, chapterId };
+        return { success: true, chapterId, audioGenerationStarted };
       } catch (error) {
         console.error('Error saving chapter:', error);
         throw error;
@@ -987,7 +1029,57 @@ app.on('ready', () => {
 
     ipcMain.handle('delete-chapter', async (event, id) => {
       try {
+        // First, get audio info for cleanup before deleting chapter
+        let audioUrlToCleanup: string | null = null;
+        try {
+          const { chapterAudio } = require('./db');
+          const existingAudio = await db.select().from(chapterAudio)
+            .where(eq(chapterAudio.chapterId, id))
+            .limit(1);
+          
+          if (existingAudio.length > 0 && existingAudio[0].audioUrl) {
+            audioUrlToCleanup = existingAudio[0].audioUrl;
+          }
+        } catch (audioCheckError) {
+          console.warn('Could not check for audio files before deletion:', audioCheckError);
+        }
+        
         await db.delete(chapters).where(eq(chapters.id, id));
+        
+        // Clean up audio files for the deleted chapter
+        if (audioUrlToCleanup) {
+          try {
+            const audioDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Writegeist', 'audio');
+            const filename = audioUrlToCleanup.split('\\').pop() || audioUrlToCleanup.split('/').pop();
+            if (filename) {
+              const fullAudioPath = path.join(audioDir, filename);
+              if (fs.existsSync(fullAudioPath)) {
+                fs.unlinkSync(fullAudioPath);
+                console.log('Audio file cleaned up for deleted chapter:', fullAudioPath);
+              }
+            }
+          } catch (audioCleanupError) {
+            console.warn('Could not clean up audio file for deleted chapter:', audioCleanupError);
+          }
+        }
+        
+        // Clean up audio via API service (redundant safety)
+        try {
+          const response = await fetch(`http://localhost:8000/audio/cleanup/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          if (response.ok) {
+            console.log('Audio cleaned up via API for deleted chapter:', id);
+          } else {
+            console.warn('Failed to clean up audio via API for deleted chapter:', id);
+          }
+        } catch (error) {
+          console.warn('Could not clean up audio via API (AI service may not be running):', error);
+        }
         
         // Clean up embeddings for the deleted chapter
         try {
@@ -1333,6 +1425,29 @@ app.on('ready', () => {
         
         const result = await db.update(chapters).set(updateData).where(eq(chapters.id, chapter.id));
         console.log('Update result:', result);
+        
+        // Mark existing audio as outdated when chapter text is updated
+        try {
+          const { chapterAudio } = require('./db');
+          const existingAudio = await db.select().from(chapterAudio)
+            .where(eq(chapterAudio.chapterId, chapter.id))
+            .limit(1);
+          
+          if (existingAudio.length > 0 && existingAudio[0].status === 'completed') {
+            // Mark existing audio as outdated (not error) - keeps the audio but shows it's old
+            await db.update(chapterAudio)
+              .set({ 
+                status: 'outdated',
+                updatedAt: new Date().toISOString()
+              })
+              .where(eq(chapterAudio.chapterId, chapter.id));
+            
+            console.log('Existing audio marked as outdated for updated chapter:', chapter.id);
+            // Note: No automatic regeneration - user can choose to regenerate manually to save API costs
+          }
+        } catch (audioInvalidationError) {
+          console.warn('Could not mark audio as outdated for updated chapter:', audioInvalidationError);
+        }
         
         // Automatically regenerate embeddings for the updated chapter
         // TEMPORARILY DISABLED - causing memory issues and UI freezing

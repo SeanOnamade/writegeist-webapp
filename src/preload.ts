@@ -102,6 +102,16 @@ const api = {
   getAllAudio: async () => {
     return await ipcRenderer.invoke('get-all-audio');
   },
+  onBackgroundAudioGenerationStarted: (callback: (data: { chapterId: string; chapterTitle: string }) => void) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('background-audio-generation-started', listener);
+    return () => ipcRenderer.removeListener('background-audio-generation-started', listener);
+  },
+  onBackgroundAudioGenerationFailed: (callback: (data: { chapterId: string; chapterTitle: string; error: string }) => void) => {
+    const listener = (_, data) => callback(data);
+    ipcRenderer.on('background-audio-generation-failed', listener);
+    return () => ipcRenderer.removeListener('background-audio-generation-failed', listener);
+  },
 };
 
 contextBridge.exposeInMainWorld('api', api);

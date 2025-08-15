@@ -32,7 +32,7 @@ declare global {
     api: {
       echo: (text: string) => Promise<string>;
       ingestChapter: (payload: { title: string; text: string }) => Promise<any>;
-      saveChapterToDB: (chapter: any) => Promise<{ success: boolean; chapterId?: string }>;
+      saveChapterToDB: (chapter: any) => Promise<{ success: boolean; chapterId?: string; audioGenerationStarted?: boolean }>;
       getChapters: () => Promise<Chapter[]>;
       deleteChapter: (id: string) => Promise<void>;
       getProjectDoc: () => Promise<string>;
@@ -49,6 +49,8 @@ declare global {
       generateAudio: (chapterId: string) => Promise<any>;
       getAudioStatus: (chapterId: string) => Promise<any>;
       getAllAudio: () => Promise<any[]>;
+      onBackgroundAudioGenerationStarted: (callback: (data: { chapterId: string; chapterTitle: string }) => void) => () => void;
+      onBackgroundAudioGenerationFailed: (callback: (data: { chapterId: string; chapterTitle: string; error: string }) => void) => () => void;
     };
   }
 } 

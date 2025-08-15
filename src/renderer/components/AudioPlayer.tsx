@@ -161,15 +161,19 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   const handleProgressBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const progressBar = progressBarRef.current;
     const audio = audioRef.current;
-    if (!progressBar || !audio) return;
+    if (!progressBar || !audio || !duration) return;
     
     const rect = progressBar.getBoundingClientRect();
-    const x = e.clientX - rect.left;
+    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
     const percentage = x / rect.width;
-    const newTime = percentage * duration;
+    const newTime = Math.max(0, Math.min(percentage * duration, duration));
     
-    audio.currentTime = newTime;
-    setCurrentTime(newTime);
+    try {
+      audio.currentTime = newTime;
+      setCurrentTime(newTime);
+    } catch (error) {
+      console.warn('Failed to seek audio:', error);
+    }
   };
   
   const handleProgressBarDrag = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -189,12 +193,13 @@ export const AudioPlayer: React.FC<AudioPlayerProps> = ({
   };
   
   const formatTime = (seconds: number) => {
+    if (!isFinite(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
-  const progressPercentage = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPercentage = duration > 0 ? Math.min(100, Math.max(0, (currentTime / duration) * 100)) : 0;
   
   return (
     <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-4">

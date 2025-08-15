@@ -18,6 +18,8 @@ class TTSService:
         self.audio_dir.mkdir(parents=True, exist_ok=True)
         self.config = self._load_config()
         self._init_clients()
+        # Track chapters currently being processed to prevent concurrent generation
+        self.active_generations = set()
     
     def _load_config(self) -> Dict[str, Any]:
         """Load configuration from AppData"""
@@ -38,35 +40,43 @@ class TTSService:
     
     def _update_audio_status(self, audio_id: str, status: str, audio_url: Optional[str] = None, duration: Optional[int] = None):
         """Update audio record in database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        if audio_url and duration is not None:
-            cursor.execute("""
-                UPDATE chapter_audio 
-                SET status = ?, audio_url = ?, duration = ?, updated_at = datetime('now')
-                WHERE id = ?
-            """, (status, audio_url, duration, audio_id))
-        else:
-            cursor.execute("""
-                UPDATE chapter_audio 
-                SET status = ?, updated_at = datetime('now')
-                WHERE id = ?
-            """, (status, audio_id))
-        
-        conn.commit()
-        conn.close()
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
+            cursor = conn.cursor()
+            
+            if audio_url and duration is not None:
+                cursor.execute("""
+                    UPDATE chapter_audio 
+                    SET status = ?, audio_url = ?, duration = ?, updated_at = datetime('now')
+                    WHERE id = ?
+                """, (status, audio_url, duration, audio_id))
+            else:
+                cursor.execute("""
+                    UPDATE chapter_audio 
+                    SET status = ?, updated_at = datetime('now')
+                    WHERE id = ?
+                """, (status, audio_id))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error updating audio status for {audio_id}: {e}")
+            raise
     
     def _get_chapter_text(self, chapter_id: str) -> Optional[str]:
         """Get chapter text from database"""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT text FROM chapters WHERE id = ?", (chapter_id,))
-        result = cursor.fetchone()
-        
-        conn.close()
-        return result[0] if result else None
+        try:
+            conn = sqlite3.connect(self.db_path, timeout=10.0)
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT text FROM chapters WHERE id = ?", (chapter_id,))
+            result = cursor.fetchone()
+            
+            conn.close()
+            return result[0] if result else None
+        except Exception as e:
+            print(f"Error getting chapter text for {chapter_id}: {e}")
+            return None
     
     def _estimate_duration(self, text: str) -> int:
         """Estimate audio duration in seconds based on text length"""
@@ -139,7 +149,14 @@ class TTSService:
     
     async def process_chapter(self, chapter_id: str, audio_id: str) -> Dict[str, Any]:
         """Process a single chapter to generate audio"""
+        # Check if already processing this chapter
+        if chapter_id in self.active_generations:
+            raise ValueError(f"Chapter {chapter_id} is already being processed")
+        
         try:
+            # Mark as active
+            self.active_generations.add(chapter_id)
+            
             # Update status to processing
             self._update_audio_status(audio_id, "processing")
             
@@ -147,6 +164,17 @@ class TTSService:
             text = self._get_chapter_text(chapter_id)
             if not text:
                 raise ValueError(f"Chapter {chapter_id} not found")
+            
+            # Validate text content
+            text = text.strip()
+            if len(text) < 10:
+                raise ValueError(f"Chapter {chapter_id} has insufficient text for audio generation")
+            
+            # Check available disk space (basic check)
+            import shutil
+            free_space = shutil.disk_usage(self.audio_dir).free
+            if free_space < 100 * 1024 * 1024:  # Less than 100MB
+                raise ValueError("Insufficient disk space for audio generation")
             
             # Generate audio based on provider
             provider = self.config.get('TTS_PROVIDER', 'openai')
@@ -166,8 +194,25 @@ class TTSService:
             audio_filename = f"{chapter_id}.mp3"
             audio_path = self.audio_dir / audio_filename
             
+            # Validate audio data before saving
+            if not audio_data or len(audio_data) < 1024:  # Less than 1KB likely corrupted
+                raise ValueError(f"Generated audio data appears to be corrupted or empty (size: {len(audio_data) if audio_data else 0} bytes)")
+            
             with open(audio_path, 'wb') as f:
                 f.write(audio_data)
+                f.flush()  # Ensure data is written to disk
+                os.fsync(f.fileno())  # Force write to disk
+            
+            # Verify file was written correctly
+            if not audio_path.exists():
+                raise ValueError("Audio file was not created")
+            
+            actual_size = audio_path.stat().st_size
+            if actual_size < 1024:
+                raise ValueError(f"Audio file is too small (size: {actual_size} bytes)")
+            
+            if actual_size != len(audio_data):
+                raise ValueError(f"Audio file size mismatch (expected: {len(audio_data)}, actual: {actual_size})")
             
             # Update database with success
             self._update_audio_status(audio_id, "completed", str(audio_path), duration)
@@ -188,6 +233,9 @@ class TTSService:
                 "audio_id": audio_id,
                 "error": "Audio generation failed"
             }
+        finally:
+            # Always remove from active generations
+            self.active_generations.discard(chapter_id)
     
     def create_audio_record(self, chapter_id: str) -> str:
         """Create a new audio record in the database"""
@@ -282,6 +330,7 @@ class TTSService:
         results = cursor.fetchall()
         
         # Delete files and records beyond keep_count
+        cleaned_count = 0
         for i, (audio_id, audio_url) in enumerate(results):
             if i >= keep_count and audio_url:
                 try:
@@ -289,11 +338,17 @@ class TTSService:
                     audio_path = Path(audio_url)
                     if audio_path.exists():
                         audio_path.unlink()
+                        print(f"Deleted audio file: {audio_path}")
                     
                     # Delete record
                     cursor.execute("DELETE FROM chapter_audio WHERE id = ?", (audio_id,))
+                    cleaned_count += 1
                 except Exception as e:
                     print(f"Error cleaning up audio {audio_id}: {e}")
         
+        if cleaned_count > 0:
+            print(f"Cleaned up {cleaned_count} old audio files")
+        
         conn.commit()
         conn.close()
+        return cleaned_count
