@@ -2,7 +2,7 @@ name: Build Desktop App
 
 on:
   push:
-    branches: [ main, editor-yoopta ]
+    branches: [ main, editor-yoopta, audio-improvements-robust ]
     tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
