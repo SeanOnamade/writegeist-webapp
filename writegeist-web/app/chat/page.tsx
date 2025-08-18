@@ -41,7 +41,7 @@ export default function ChatPage() {
         <div className="md:hidden flex items-center justify-between p-4 border-b">
           <button
             onClick={() => setShowSidebar(!showSidebar)}
-            className="p-2 hover:bg-muted rounded-lg"
+            className="p-2 hover:bg-muted rounded-lg cursor-pointer"
           >
             ☰
           </button>
