@@ -38,12 +38,13 @@ export async function POST(request: NextRequest) {
     // Search for similar embeddings using vector similarity
     const supabase = await createClient()
     
-    // First, let's check if we have any embeddings at all
+    // First, let's check if we have any embeddings at all (force fresh query)
     const { data: allEmbeddings, error: countError } = await supabase
       .from('document_embeddings')
-      .select('id, content_text, project_id, user_id, chapter_id, content_type, metadata')
+      .select('id, content_text, project_id, user_id, chapter_id, content_type, metadata, created_at')
       .eq('project_id', projectId)
-      .limit(10)
+      .order('created_at', { ascending: false })
+      .limit(50)
 
     console.log('Total embeddings for project:', allEmbeddings?.length || 0)
     if (allEmbeddings && allEmbeddings.length > 0) {
@@ -53,17 +54,36 @@ export async function POST(request: NextRequest) {
       console.log('Sample embedding chapter_id:', allEmbeddings[0].chapter_id)
       console.log('Sample embedding content_type:', allEmbeddings[0].content_type)
       console.log('All embedding types:', allEmbeddings.map(e => e.content_type))
+      console.log('All chapter IDs:', [...new Set(allEmbeddings.map(e => e.chapter_id))])
+      console.log('Chunked embeddings count:', allEmbeddings.filter(e => e.content_type === 'chapter_chunk').length)
+      console.log('Regular embeddings count:', allEmbeddings.filter(e => e.content_type === 'chapter').length)
+      
+      // Show recent chunked embeddings
+      const recentChunked = allEmbeddings.filter(e => e.content_type === 'chapter_chunk').slice(0, 3)
+      if (recentChunked.length > 0) {
+        console.log('Recent chunked embedding sample:', recentChunked[0].content_text?.substring(0, 100))
+        console.log('Recent chunked embedding created_at:', recentChunked[0].created_at)
+      }
     }
 
-    // Also check ALL embeddings regardless of project
+    // Also check ALL embeddings regardless of project  
     const { data: allEmbeddingsGlobal } = await supabase
       .from('document_embeddings')
-      .select('id, content_text, project_id, user_id, chapter_id')
-      .limit(10)
+      .select('id, content_text, project_id, user_id, chapter_id, content_type, created_at')
+      .order('created_at', { ascending: false })
+      .limit(30)
 
     console.log('Total embeddings globally:', allEmbeddingsGlobal?.length || 0)
     if (allEmbeddingsGlobal && allEmbeddingsGlobal.length > 0) {
       console.log('Global embeddings project IDs:', allEmbeddingsGlobal.map(e => e.project_id))
+      console.log('Global chunked embeddings:', allEmbeddingsGlobal.filter(e => e.content_type === 'chapter_chunk').length)
+      
+      // Show most recent embeddings
+      const recentEmbeddings = allEmbeddingsGlobal.slice(0, 5)
+      console.log('Most recent embeddings:')
+      recentEmbeddings.forEach((e, i) => {
+        console.log(`  ${i+1}. Type: ${e.content_type}, Project: ${e.project_id}, Chapter: ${e.chapter_id}`)
+      })
     }
 
     // Try with no project filter first to see if embeddings exist at all
@@ -81,7 +101,7 @@ export async function POST(request: NextRequest) {
              .rpc('search_embeddings', {
                query_embedding: queryEmbedding,
                match_threshold: 0.1, // Much lower threshold to catch more results
-               match_count: limit * 2, // Get more results to account for chunks
+               match_count: limit * 4, // Get even more results to find best matches
                project_filter: projectId
              })
 

@@ -23,21 +23,9 @@ export const chaptersAPI = {
       savedChapter = result.data || null
     }
     
-    // Generate embeddings asynchronously after successful save
-    if (savedChapter && savedChapter.content && savedChapter.content.length > 50) {
-      // Don't await this - let it happen in the background
-      fetch('/api/embeddings/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chapterId: savedChapter.id,
-          content: savedChapter.content,
-          projectId: savedChapter.project_id
-        })
-      }).catch(error => {
-        console.error('Error generating embeddings:', error)
-      })
-    }
+    // Skip regular embedding generation - chunked embeddings are handled by storage system
+    // The storage system now handles chunked embeddings which are superior to single embeddings
+    console.log('Skipping regular embedding generation - using chunked embeddings from storage system')
     
     return savedChapter
   },

@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
         chapters.forEach(chapter => {
           context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
           if (chapter.content) {
-            // Include more content - up to 2000 characters per chapter
-            const excerpt = chapter.content.substring(0, 2000)
-            context += `${excerpt}${chapter.content.length > 2000 ? '\n...[content truncated]...' : ''}\n`
+            // Include reasonable excerpt - up to 800 characters per chapter
+            const excerpt = chapter.content.substring(0, 800)
+            context += `${excerpt}${chapter.content.length > 800 ? '\n...[content truncated]...' : ''}\n`
           }
         })
         context += "\n"
@@ -115,17 +115,48 @@ export async function POST(request: NextRequest) {
         }
       } catch (error) {
         console.error('Error performing vector search:', error)
-        // Fallback: if vector search fails, use chapter content directly
+        // Fallback: if vector search fails, use chapter content directly (truncated)
         if (fallbackChapters && fallbackChapters.length > 0) {
           context += "\n=== CHAPTER CONTENT (Fallback) ===\n"
           fallbackChapters.forEach(chapter => {
             if (chapter.content) {
               context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
-              context += `${chapter.content}\n`
+              // Limit fallback content to 1000 characters per chapter
+              const excerpt = chapter.content.substring(0, 1000)
+              context += `${excerpt}${chapter.content.length > 1000 ? '\n...[content truncated]...' : ''}\n`
             }
           })
           context += "\n"
         }
+      }
+    }
+    
+    // Smart context truncation to stay under token limits
+    const MAX_CONTEXT_LENGTH = 12000 // ~3000 tokens, better balance
+    if (context.length > MAX_CONTEXT_LENGTH) {
+      // Smarter truncation - keep project info and recent content
+      const lines = context.split('\n')
+      const projectInfo = lines.slice(0, 10).join('\n') // Keep project details
+      const remainingLength = MAX_CONTEXT_LENGTH - projectInfo.length - 200
+      
+      if (remainingLength > 0) {
+        const contentLines = lines.slice(10)
+        let truncatedContent = ""
+        let currentLength = 0
+        
+        // Add content until we hit the limit
+        for (const line of contentLines) {
+          if (currentLength + line.length < remainingLength) {
+            truncatedContent += line + '\n'
+            currentLength += line.length + 1
+          } else {
+            break
+          }
+        }
+        
+        context = projectInfo + '\n' + truncatedContent + '\n\n...[Additional content truncated to fit token limits]...'
+      } else {
+        context = projectInfo + '\n\n...[Content truncated to fit token limits]...'
       }
     }
     

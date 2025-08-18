@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
       .insert({
         content_text: content,
         content_hash: Buffer.from(content).toString('base64').substring(0, 50), // Simple hash
-        embedding: embedding,
+        embedding: JSON.stringify(embedding),
         chapter_id: chapterId,
         project_id: projectId,
         user_id: user.id,

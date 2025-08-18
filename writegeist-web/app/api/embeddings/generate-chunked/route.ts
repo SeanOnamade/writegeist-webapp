@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           .insert({
             content_text: chunk.text,
             content_hash: Buffer.from(chunk.text).toString('base64').substring(0, 50),
-            embedding: embedding,
+            embedding: JSON.stringify(embedding),
             chapter_id: chapterId,
             project_id: projectId,
             user_id: user.id,
@@ -105,6 +105,23 @@ export async function POST(request: NextRequest) {
     const successful = results.filter(r => r !== null)
 
     console.log(`Successfully generated ${successful.length}/${chunks.length} chunked embeddings`)
+    console.log('Sample stored embedding IDs:', successful.slice(0, 3).map(r => r?.id))
+    
+    // Verify embeddings were actually stored
+    const { data: verifyEmbeddings } = await supabase
+      .from('document_embeddings')
+      .select('id, content_type, chapter_id')
+      .eq('chapter_id', chapterId)
+      .eq('content_type', 'chapter_chunk')
+    
+    console.log(`Verification: Found ${verifyEmbeddings?.length || 0} chunked embeddings in database`)
+    
+    if (verifyEmbeddings && verifyEmbeddings.length > 0) {
+      console.log('Sample chunked embedding details:')
+      console.log('- ID:', verifyEmbeddings[0].id)
+      console.log('- Chapter ID:', verifyEmbeddings[0].chapter_id)
+      console.log('- Content type:', verifyEmbeddings[0].content_type)
+    }
 
     return NextResponse.json({ 
       success: true,

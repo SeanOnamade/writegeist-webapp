@@ -41,7 +41,55 @@ export class ChapterContentStorage {
 
       if (uploadError) {
         console.error('Storage upload error:', uploadError)
-        throw new Error(`Failed to upload content: ${uploadError.message}`)
+        console.error('Upload error details:', JSON.stringify(uploadError, null, 2))
+        
+        // Try to continue with database-only storage if Supabase storage fails
+        console.log('Storage upload failed, falling back to database-only storage')
+        
+        // Update chapter with content directly in database as fallback
+        const { data: chapterData, error: updateError } = await this.supabase
+          .from('chapters')
+          .update({
+            content: content,
+            title: metadata.title,
+            status: metadata.status as any,
+            word_count: metadata.wordCount,
+            order_index: metadata.orderIndex,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', chapterId)
+          .select()
+
+        if (updateError) {
+          throw new Error(`Failed to save content: ${updateError.message}`)
+        }
+
+        // Still try to generate embeddings even if storage fails
+        try {
+          console.log('Triggering chunked embedding generation (fallback mode)...')
+          const embeddingResponse = await fetch('/api/embeddings/generate-chunked', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chapterId: chapterId,
+              content: content,
+              projectId: metadata.projectId || 'ededb541-8ea5-4304-b830-ca628e30b47e'
+            })
+          })
+          
+          if (embeddingResponse.ok) {
+            const embeddingResult = await embeddingResponse.json()
+            console.log(`Chunked embeddings generated successfully (fallback): ${embeddingResult.successfulEmbeddings}/${embeddingResult.totalChunks} chunks`)
+          }
+        } catch (embeddingError) {
+          console.log('Embedding generation also failed:', embeddingError)
+        }
+
+        return {
+          success: true,
+          data: chapterData?.[0],
+          storage_method: 'database_fallback'
+        }
       }
 
       console.log('Content uploaded to storage:', uploadData.path)
