@@ -1,242 +1,197 @@
-# Writegeist Desktop
+# Writegeist Platform
 
-A modern desktop application for writers to manage their books, chapters, and creative projects with AI-powered analysis.
+A comprehensive AI-powered writing platform available as both desktop and web applications. Create, manage, and enhance your books with intelligent chapter organization, contextual AI chat, and professional audio generation.
 
-<img width="1334" height="988" alt="Screenshot 2025-07-28 190657" src="https://github.com/user-attachments/assets/9d075b3e-1456-439f-a9e6-f7f19a8a8217" />
+## 🌟 **Platform Overview**
 
-## 🚀 Production Ready
+### 🖥️ **Desktop Application**
+- **Local SQLite storage** with full offline capabilities
+- **Bundled Python backend** - no setup required
+- **Rich text editor** with real-time formatting
+- **Cross-platform installer** for Windows
 
-**Writegeist Desktop is now fully deployable!** The application packages into a single-click installer that includes:
+### 🌐 **Web Application** 
+- **Cloud-native architecture** with Supabase backend
+- **Real-time collaboration** and multi-user support
+- **Professional audio generation** with OpenAI TTS
+- **Responsive design** for any device
 
-- **Bundled FastAPI Backend**: No Python installation required for end users
-- **Configuration Management**: User-friendly settings page for API keys
-- **SQLite Database**: Local data storage with full persistence
-- **Cross-Platform Installer**: Currently supports Windows with Squirrel
+## 🎵 **Audio System Features**
 
-### For End Users
+### **Text-to-Speech Generation**
+- **Full-length audio** - Generates 11+ minute narrations from long chapters
+- **Intelligent chunking** - Handles unlimited chapter length via 4KB chunking
+- **High-quality voices** - OpenAI TTS with multiple voice options
+- **Smart truncation** - Finds natural breaking points for optimal audio flow
 
-📥 **Download**: Get the latest installer from [Releases](../../releases)  
-📖 **Setup Guide**: See [USER_GUIDE.md](./USER_GUIDE.md) for installation and usage instructions  
-⚙️ **Requirements**: Just your OpenAI API key - everything else is included!
+### **Audio Management**
+- **Secure storage** - Audio files stored in Supabase with user isolation
+- **Real-time status** - Live updates on generation progress
+- **Download functionality** - MP3 files with proper metadata
+- **Built-in player** - Stream audio directly in browser
 
-### For Developers
+### **Production Ready**
+- **Chunking system** - Mirrors desktop version's proven approach
+- **Actual duration parsing** - Uses MP3 metadata for accurate timing
+- **Error handling** - Comprehensive error states and retry mechanisms
+- **Cross-platform** - Works on any device with web browser
 
-🔧 **Build**: `npm run make` creates the installer  
-🤖 **CI/CD**: GitHub Actions automatically builds on every push  
-📦 **Architecture**: Electron frontend + bundled FastAPI backend
+## 🚀 **Quick Start**
 
-## ✨ Features
+### **Web Application (Recommended)**
 
-- **Chapter Management**: Create, edit, and organize your chapters with full-text search
-- **AI-Powered Analysis**: Automated extraction of characters, locations, and narrative elements using GPT-4o
-- **Enhanced Extraction**: Extraction now includes character traits, detailed settings, chapter summaries, and literary tropes
-- **Refined Outputs**: Extraction now outputs refined summaries, tropes, and filters locations
-- **Smart H2 Sync**: Dynamic markdown synchronization with intelligent content organization
-- **Live Updates**: Real-time project document updates when chapters are created
-- **Writing Dashboard**: Comprehensive overview of your writing progress
-- **Project Hub**: Centralized document management with persistent UI state
-- **Smart Character Tracking**: Automatically extract and sync character names across chapters and project overview
-- **Project Hub**: Notion-style markdown editing for project notes and outlines
-- **Auto-scroll Navigation**: Jump to specific sections in your project document
-- **Dark Theme**: Professional dark interface optimized for writing
-- **Dark, Modern UI**: Built with Tailwind CSS and shadcn/ui components
-- **Project Markdown Editing**: Notion-style project hub with markdown editing for Ideas/Notes, Setting, Full Outline, and Characters
-- **Local Database**: SQLite storage with Drizzle ORM
-- **Cross-Platform**: Built with Electron for Windows, macOS, and Linux
-- **Rich Text Editor**: Powered by TipTap with real-time markdown shortcuts
-- **Project Management**: Organize chapters, characters, settings, and outlines
-- **Character & Location Tracking**: Automatically extract and organize story elements
-- **Chapter Editor**: Write and edit individual chapters with character/location sync
-- **Project now auto-saves with toast notifications & consistent markdown bullets**: Enhanced UX with visual save feedback and standardized asterisk bullet formatting
-- **Database Storage**: Local SQLite database for reliable data persistence
-- **Modern UI**: Dark theme with responsive design using Tailwind CSS
+1. **Visit**: https://writegeist-aa24f0db2-seans-projects-9cbbfc68.vercel.app
+2. **Sign up** with your email
+3. **Add OpenAI API key** in Settings
+4. **Create a project** and start writing
+5. **Generate audio** from any chapter
 
-## Setup
+### **Desktop Application**
 
-1. **Install dependencies:**
-   ```bash
-   npm install --legacy-peer-deps
-   npm run start   # runs Electron
-   ```
+1. **Download** the latest installer from [Releases](../../releases)
+2. **Install** and launch Writegeist
+3. **Add OpenAI API key** in Settings
+4. **Import existing projects** or create new ones
 
-2. **AI Service Setup:**
-   ```bash
-   cd ai-service
-   .venv\Scripts\activate
-   pip install -r requirements.txt
-   uvicorn main:app --reload --port 8000
-   ```
+## 🛠️ **Development Setup**
 
-## 🔑 Environment Variables
-
-Before running the AI service, you need to configure your OpenAI API key:
-
-1. **Copy the environment template:**
-   ```bash
-   cp .env.template .env
-   ```
-
-2. **Get your OpenAI API key from**: https://platform.openai.com/api-keys
-
-3. **Edit `.env` file and replace `your_openai_api_key_here` with your actual API key:**
-   ```
-   OPENAI_API_KEY=sk-your-actual-key-here
-   ```
-
-4. **Run the AI service:**
-   ```bash
-   cd ai-service
-   .venv\Scripts\activate  # Windows
-   # or source .venv/bin/activate  # Linux/Mac
-   uvicorn main:app --reload --port 8000
-   ```
-
-**Note**: The AI service will return a 501 error with `{"error":"No API key"}` if the OPENAI_API_KEY is not configured.
-
-3. **Initialize shadcn/ui (if needed):**
-   ```bash
-   npx shadcn-ui@latest init
-   ```
-
-## Development
-
-- **Frontend**: React + TypeScript + Tailwind CSS + shadcn/ui + Electron
-- **Backend**: FastAPI (Python) with OpenAI GPT-4o integration via LangGraph
-- **Database**: SQLite with Drizzle ORM
-- **Icons**: Lucide React
-
-The AI service runs at http://127.0.0.1:8000 with endpoints:
-- POST `/echo` - Echo service
-- POST `/ingest_chapter` - OpenAI GPT-4o powered chapter analysis and metadata extraction
-- GET `/project/section/{section_name}` - Extract specific sections from project markdown file
-
-## File Structure
-
-- `src/renderer/` - React frontend components
-- `src/components/ui/` - shadcn/ui components  
-- `src/renderer/features/` - Feature-specific components
-- `ai-service/` - FastAPI backend for AI processing
-- `src/db.ts` - Database schema and connection
-
-## Project Markdown Editing
-
-The app features a Notion-style project hub with ProseMirror-style UX for managing your writing project:
-
-- **Unified Project View**: A single markdown document that serves as your project's central hub
-- **Structured Sections**: Pre-organized sections for Ideas/Notes, Setting, Full Outline, and Characters
-- **Live Preview**: Switch between editing and formatted preview modes
-- **Auto-Save**: Changes are automatically persisted to the local SQLite database
-- **Expandable Sidebar**: Accordion-style navigation with nested project sections
-
-### Using the Project Page
-
-1. **Navigate to Project**: Click "Project" in the sidebar or create/open a project from the home screen
-2. **Edit Mode**: Click the "Edit" button to switch to markdown editing mode
-3. **Preview Mode**: Click "Save" to save changes and return to the formatted preview
-4. **Smart Navigation**: The sidebar auto-updates from H2 headings inside your Project doc - any new sections you add will automatically appear in the navigation
-5. **Auto-scroll**: Click any section in the sidebar to smoothly scroll to that heading in your document
-6. **Auto-open**: The app remembers your last project and automatically opens it when you restart
-
-## Day-2 Upgrade Complete
-
-The app now features:
-- Dark theme with sidebar navigation
-- Chapter ingest form with AI analysis
-- Toast notifications
-- Full book chapter listing
-- Modern shadcn/ui components
-
-## Smart Character Sync
-
-The app features intelligent character management that connects your chapters with your project overview:
-
-- **Auto-detection**: When you add a new chapter, the AI extracts character names
-- **Smart Append**: New characters are automatically added to your Project's Characters section
-- **Duplicate Prevention**: The system only adds characters that don't already exist
-- **Seamless Integration**: Characters from chapter analysis flow directly into your project documentation
-
-### Character Workflow
-
-1. **Write Chapter**: Add content in the "Insert Chapter" page
-2. **AI Analysis**: The system extracts characters, locations, and POV
-3. **Auto-sync**: New characters are automatically appended to your Project's Characters section
-4. **Manual Management**: You can still manually edit the Characters section in your Project page
-
-## Day-3 Upgrade Complete
-
-The app now includes:
-- Notion-style project hub with React Router navigation
-- Markdown editing with react-markdown and remark-gfm  
-- Accordion sidebar navigation with nested project sections
-- Project document persistence with SQLite database
-- Home screen for project creation/opening
-
-## Chapter Management
-
-The app provides comprehensive chapter management capabilities:
-
-- **Create Chapters**: Add new chapters with AI-powered analysis
-- **Edit Chapters**: Click the edit button on any chapter to modify title and content
-- **Update Metadata**: When editing, you can update both the title and text content
-- **Smart Navigation**: Seamless switching between chapter list and editor views
-- **Auto-save**: Changes are immediately saved to the local database
-
-### Chapter Workflow
-
-1. **View Chapters**: Navigate to "Chapters" in the sidebar to see all your chapters
-2. **Create New**: Click "Add Chapter" to create a new chapter with AI analysis
-3. **Edit Existing**: Click the edit icon (pencil) on any chapter to modify it
-4. **Update Content**: Make your changes and click "Update Chapter" to save
-5. **Cancel Changes**: Click "Cancel" to discard edits and return to the original content
-
-## Day-4 Upgrade Complete
-
-New navigation polish and smart character sync features:
-- Dynamic sidebar navigation that updates from markdown H2 headings
-- Smart auto-scroll to document sections with smooth scrolling
-- Auto-open last project functionality with localStorage persistence
-- Intelligent character sync between chapters and project documentation
-- Enhanced routing with dedicated Chapters page
-
-## Day-5 Upgrade Complete
-
-Chapter editing and management features:
-- Full chapter editing functionality with title and content modification
-- Unified ChapterEditor component for both creating and editing chapters
-- Edit buttons on all chapters in the Chapters page
-- Seamless UI transitions between viewing and editing modes
-- Database update operations with proper error handling
-
-## 🧪 Testing & CI
-
-Writegeist ships with lightweight smoke tests for the AI-extraction pipeline.
+### **Web Application**
 
 ```bash
-# In one terminal start the backend
-cd ai-service && . .venv/Scripts/activate
-uvicorn main:app --port 8000 --reload
+# Clone repository
+git clone https://github.com/SeanOnamade/writegeist-webapp.git
+cd writegeist-webapp/writegeist-web
 
-# In another terminal
-pytest -q ai-service/tests
+# Install dependencies
+npm install --legacy-peer-deps
+
+# Set up environment variables
+cp .env.example .env.local
+# Add your Supabase and OpenAI credentials
+
+# Run development server
+npm run dev
 ```
 
-The tests POST fixture chapters and assert that characters, locations, and summaries are extracted correctly.
-(Optionally wire this into GitHub Actions later.)
+### **Desktop Application**
 
-### ✏️ Inline Novel Editor
+```bash
+# From project root
+npm install
 
-The Project page now uses the **Novel** (TipTap-based) editor for seamless inline editing.
+# Start development (launches both Electron and Python backend)
+npm start
 
-- **WYSIWYG Editing**: Rich text editor with markdown support
-- **Keyboard Shortcuts**: `⌘/Ctrl + B` for bold, `##` + space for H2, etc.
-- **Auto-save**: Content saves automatically every second to SQLite
-- **Markdown Compatible**: Seamless conversion between markdown and rich text
-- **Dark Theme**: Integrated styling that matches the app's dark theme
-- **Real-time Updates**: Listens for external document changes and updates editor content
-- **ProseMirror-based**: Built on the reliable ProseMirror editing framework
+# Build installer
+npm run make
+```
 
-The editor eliminates the need for separate edit/preview modes, providing a modern writing experience similar to Notion or other contemporary writing tools.
+## 📦 **Deployment**
 
-### 🔗 n8n Workflow Integration
+### **Web Application Deployment**
 
-<img width="970" height="399" alt="image" src="https://github.com/user-attachments/assets/7cad43d3-d714-4a11-8626-5a2ddb7079dc" />
+```bash
+# From writegeist-webapp directory (parent):
+git add .
+git commit -m "your commit message"
+git deploy  # Pushes to GitHub AND deploys to Vercel
+```
+
+**Alternative (ACPV - separate commands):**
+```bash
+# From writegeist-webapp directory (parent):
+git add .
+git commit -m "your commit message"
+git push origin main
+npx vercel --prod
+```
+
+**Why manual deployment?** TailwindCSS v4 uses native modules that don't work on Vercel's Linux servers. Manual deployment builds on your Windows machine where everything works perfectly.
+
+### **Desktop Application Deployment**
+
+```bash
+# Build installer
+npm run make
+
+# Installers created in /out directory
+# Upload to GitHub Releases for distribution
+```
+
+## 🔧 **Configuration**
+
+### **Environment Variables**
+
+**Web Application** (`.env.local`):
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+OPENAI_API_KEY=your_openai_api_key
+```
+
+**Desktop Application**:
+- Configure through Settings page (no file editing required)
+- API keys stored securely in local database
+
+### **Database Setup**
+
+**Web Application** requires Supabase setup:
+1. **Create Supabase project**
+2. **Run migrations** in `writegeist-web/supabase/migrations/`
+3. **Configure RLS policies** (included in migrations)
+
+**Desktop Application** uses local SQLite (no setup required).
+
+## 🎯 **Key Features**
+
+### **Chapter Management**
+- **Unlimited chapters** per project
+- **Real-time word counting** and statistics
+- **Drag-and-drop reordering** 
+- **Status tracking** (Draft, In Progress, Completed)
+
+### **AI Integration**
+- **Contextual chat** - AI knows your entire project
+- **Chapter-aware responses** - References specific content
+- **Vector search** - Finds relevant content across all chapters
+- **Smart suggestions** - Based on your writing style
+
+### **Audio Generation**
+- **Professional narration** - OpenAI TTS with HD quality
+- **Multiple voices** - Choose from 6 different voice options
+- **Full chapter support** - No length limitations
+- **Download & share** - MP3 files for any use
+
+### **Collaboration** (Web Only)
+- **Multi-user projects** - Real-time collaboration
+- **Secure isolation** - Users only see their own content
+- **Cloud sync** - Access from any device
+- **Real-time updates** - See changes instantly
+
+## 🔍 **Technical Stack**
+
+### **Web Application**
+- **Frontend**: Next.js 15, React 19, TailwindCSS v4
+- **Backend**: Supabase (PostgreSQL, Auth, Storage)
+- **AI**: OpenAI GPT-4, TTS, Embeddings
+- **Deployment**: Vercel with manual builds
+
+### **Desktop Application**
+- **Frontend**: Electron, React, TailwindCSS
+- **Backend**: Python FastAPI, SQLite
+- **AI**: OpenAI GPT-4, TTS, Embeddings  
+- **Packaging**: Electron Forge with Squirrel
+
+## 📞 **Support**
+
+- **Issues**: [GitHub Issues](https://github.com/SeanOnamade/writegeist-webapp/issues)
+- **Documentation**: See `writegeist-web/` directory for web app docs
+- **User Guide**: [USER_GUIDE.md](./USER_GUIDE.md) for desktop app
+
+## 📄 **License**
+
+MIT License - See [LICENSE](./LICENSE) for details.
+
+---
+
+**Writegeist Platform - Where AI meets creative writing.** ✨
