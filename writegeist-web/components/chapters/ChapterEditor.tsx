@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Chapter } from '@/types/database'
@@ -21,6 +22,7 @@ export function ChapterEditor({
   autoSave = true, 
   autoSaveInterval = 30000 
 }: ChapterEditorProps) {
+  const router = useRouter()
   const [title, setTitle] = useState(chapter.title)
   const [content, setContent] = useState(chapter.content)
   const [status, setStatus] = useState(chapter.status)
@@ -123,6 +125,28 @@ export function ChapterEditor({
       return
     }
     onCancel?.()
+  }
+
+  const handleGenerateAudio = () => {
+    // Save any unsaved changes first, then navigate to audio page
+    if (hasUnsavedChanges) {
+      performSave(false).then(() => {
+        router.push('/audio')
+      })
+    } else {
+      router.push('/audio')
+    }
+  }
+
+  const handleGetWritingHelp = () => {
+    // Save any unsaved changes first, then navigate to AI chat
+    if (hasUnsavedChanges) {
+      performSave(false).then(() => {
+        router.push('/chat')
+      })
+    } else {
+      router.push('/chat')
+    }
   }
 
   const formatLastSaved = () => {
@@ -283,11 +307,21 @@ export function ChapterEditor({
                 <Button variant="outline" size="sm" className="w-full justify-start">
                   📊 Analyze Chapter
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full justify-start"
+                  onClick={handleGenerateAudio}
+                >
                   🎵 Generate Audio
                 </Button>
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  💡 Get AI Suggestions
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full justify-start"
+                  onClick={handleGetWritingHelp}
+                >
+                  🤖 Get Writing Help
                 </Button>
               </div>
             </div>
@@ -365,11 +399,21 @@ export function ChapterEditor({
                   <Button variant="outline" size="sm" className="w-full justify-start">
                     📊 Analyze Chapter
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full justify-start"
+                    onClick={handleGenerateAudio}
+                  >
                     🎵 Generate Audio
                   </Button>
-                  <Button variant="outline" size="sm" className="w-full justify-start">
-                    💡 Get AI Suggestions
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="w-full justify-start"
+                    onClick={handleGetWritingHelp}
+                  >
+                    🤖 Get Writing Help
                   </Button>
                 </div>
               </div>
