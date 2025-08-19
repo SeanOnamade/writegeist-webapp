@@ -1,18 +1,15 @@
 # Ignore desktop app files to prevent dependency conflicts
-package.json
-package-lock.json
-node_modules/
-src/
-components.json
-postcss.config.js
-tailwind.config.js
-webpack.*.ts
-forge.config.ts
-*.db
-ai-service/
-resources/
-dist/
-build/
-
-# Only deploy writegeist-web directory
-!writegeist-web/
+/package.json
+/package-lock.json
+/node_modules/
+/src/
+/components.json
+/postcss.config.js
+/tailwind.config.js
+/webpack.*.ts
+/forge.config.ts
+/*.db
+/ai-service/
+/resources/
+/dist/
+/build/
