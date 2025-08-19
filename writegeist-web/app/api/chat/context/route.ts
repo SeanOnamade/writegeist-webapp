@@ -44,8 +44,21 @@ export async function POST(request: NextRequest) {
         .order('order_index', { ascending: true })
         .limit(5)
       
-      // Store chapters for fallback use only (don't include in context yet)
+      // Store chapters for fallback use
       fallbackChapters = chapters || []
+      
+      if (chapters && chapters.length > 0) {
+        context += "\nChapter Content:\n"
+        chapters.forEach(chapter => {
+          context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
+          if (chapter.content) {
+            // Include reasonable excerpt - up to 800 characters per chapter
+            const excerpt = chapter.content.substring(0, 800)
+            context += `${excerpt}${chapter.content.length > 800 ? '\n...[content truncated]...' : ''}\n`
+          }
+        })
+        context += "\n"
+      }
       
       // Get related ideas
       const { data: ideas } = await supabase
