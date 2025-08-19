@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     // Use vector search to find the most relevant content
     if (projectId && query.trim()) {
       try {
-        const searchResponse = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/embeddings/search`, {
+        const searchResponse = await fetch(`${request.nextUrl.origin}/api/embeddings/search`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 

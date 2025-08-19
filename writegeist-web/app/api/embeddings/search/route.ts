@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     
     // First, let's check if we have any embeddings at all (force fresh query)
-    const { data: allEmbeddings, error: countError } = await supabase
+    const { data: allEmbeddings } = await supabase
       .from('document_embeddings')
       .select('id, content_text, project_id, user_id, chapter_id, content_type, metadata, created_at')
       .eq('project_id', projectId)
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try with no project filter first to see if embeddings exist at all
-    const { data: allResults, error: allError } = await supabase
+    const { data: allResults } = await supabase
       .rpc('search_embeddings', {
         query_embedding: queryEmbedding,
         match_threshold: 0.1,
