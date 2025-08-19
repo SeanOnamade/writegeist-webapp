@@ -21,13 +21,13 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
   const [deleting, setDeleting] = useState(false)
 
   const handleSave = async () => {
-    if (!title.trim() || !content.trim()) return
+    if (!title.trim()) return
 
     setSaving(true)
     try {
       const updatedIdea = await ideasAPI.update(idea.id, {
         title: title.trim(),
-        content: content.trim()
+        content: content.trim() || '--'
       })
 
       if (updatedIdea) {
@@ -143,7 +143,7 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
             <Button variant="outline" onClick={handleCancel} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={saving || !title.trim() || !content.trim()}>
+            <Button onClick={handleSave} disabled={saving || !title.trim()}>
               {saving ? 'Saving...' : 'Save'}
             </Button>
           </div>
@@ -153,9 +153,11 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1">
               <h3 className="font-semibold text-lg mb-2">{idea.title}</h3>
-              <p className="text-muted-foreground text-sm line-clamp-3 mb-3">
-                {idea.content}
-              </p>
+              {idea.content && idea.content !== '--' && (
+                <p className="text-muted-foreground text-sm line-clamp-3 mb-3">
+                  {idea.content}
+                </p>
+              )}
             </div>
             <div className="flex items-center space-x-2 ml-4">
               <select

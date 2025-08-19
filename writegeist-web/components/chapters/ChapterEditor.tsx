@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { IdeasSearchModal } from '@/components/ideas/IdeasSearchModal'
 import type { Chapter } from '@/types/database'
 import { chaptersAPI } from '@/lib/api/chapters'
 
@@ -162,6 +163,7 @@ export function ChapterEditor({
   }
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [ideasModalOpen, setIdeasModalOpen] = useState(false)
 
   return (
     <div className="flex flex-col h-full">
@@ -206,7 +208,7 @@ export function ChapterEditor({
                 onClick={() => setSidebarOpen(!sidebarOpen)}
                 className="lg:hidden"
               >
-                Stats
+                Tools
               </Button>
               {onCancel && (
                 <Button variant="outline" onClick={handleCancel} size="sm">
@@ -254,35 +256,47 @@ export function ChapterEditor({
         {/* Desktop Writing Stats Sidebar */}
         <div className="hidden lg:flex lg:w-64 border-l bg-muted/30 p-4">
           <div className="w-full">
-            <h3 className="font-semibold mb-4">Writing Stats</h3>
-            
-            <div className="space-y-4">
-              <div>
-                <div className="text-sm text-muted-foreground">Word Count</div>
-                <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-muted-foreground">Character Count</div>
-                <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-muted-foreground">Paragraphs</div>
-                <div className="text-lg font-semibold">
-                  {content.split('\n\n').filter(p => p.trim().length > 0).length}
+            <div className="mb-6">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="w-full justify-start"
+                onClick={() => setIdeasModalOpen(true)}
+              >
+                💡 Browse Ideas
+              </Button>
+            </div>
+
+            <div className="mb-6">
+              <h4 className="font-semibold mb-2">Writing Stats</h4>
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">Word Count</div>
+                  <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
                 </div>
-              </div>
-              
-              <div>
-                <div className="text-sm text-muted-foreground">Reading Time</div>
-                <div className="text-lg font-semibold">
-                  {Math.ceil(wordCount / 200)} min
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Character Count</div>
+                  <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Paragraphs</div>
+                  <div className="text-lg font-semibold">
+                    {content.split('\n\n').filter(p => p.trim().length > 0).length}
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Reading Time</div>
+                  <div className="text-lg font-semibold">
+                    {Math.ceil(wordCount / 200)} min
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-6">
               <h4 className="font-semibold mb-2">Chapter Status</h4>
               <div className="space-y-2">
                 {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
@@ -301,7 +315,7 @@ export function ChapterEditor({
               </div>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-6">
               <h4 className="font-semibold mb-2">Quick Actions</h4>
               <div className="space-y-2">
                 <Button variant="outline" size="sm" className="w-full justify-start">
@@ -337,7 +351,7 @@ export function ChapterEditor({
             />
             <div className="w-80 max-w-[90vw] border-l bg-background p-4 shadow-xl overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold">Writing Stats</h3>
+                <h3 className="font-semibold">Writing Tools</h3>
                 <Button 
                   variant="ghost" 
                   size="sm" 
@@ -348,33 +362,47 @@ export function ChapterEditor({
                 </Button>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">Word Count</div>
-                  <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Character Count</div>
-                  <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Paragraphs</div>
-                  <div className="text-lg font-semibold">
-                    {content.split('\n\n').filter(p => p.trim().length > 0).length}
+              <div className="mb-6">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full justify-start"
+                  onClick={() => setIdeasModalOpen(true)}
+                >
+                  💡 Browse Ideas
+                </Button>
+              </div>
+
+              <div className="mb-6">
+                <h4 className="font-semibold mb-2">Writing Stats</h4>
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Word Count</div>
+                    <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
                   </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Reading Time</div>
-                  <div className="text-lg font-semibold">
-                    {Math.ceil(wordCount / 200)} min
+                  
+                  <div>
+                    <div className="text-sm text-muted-foreground">Character Count</div>
+                    <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm text-muted-foreground">Paragraphs</div>
+                    <div className="text-lg font-semibold">
+                      {content.split('\n\n').filter(p => p.trim().length > 0).length}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <div className="text-sm text-muted-foreground">Reading Time</div>
+                    <div className="text-lg font-semibold">
+                      {Math.ceil(wordCount / 200)} min
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-8">
+              <div className="mt-6">
                 <h4 className="font-semibold mb-2">Chapter Status</h4>
                 <div className="space-y-2">
                   {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
@@ -393,7 +421,7 @@ export function ChapterEditor({
                 </div>
               </div>
 
-              <div className="mt-8">
+              <div className="mt-6">
                 <h4 className="font-semibold mb-2">Quick Actions</h4>
                 <div className="space-y-2">
                   <Button variant="outline" size="sm" className="w-full justify-start">
@@ -444,6 +472,13 @@ export function ChapterEditor({
           </div>
         </div>
       </div>
+
+      {/* Ideas Search Modal */}
+      <IdeasSearchModal
+        isOpen={ideasModalOpen}
+        onClose={() => setIdeasModalOpen(false)}
+        projectId={chapter.project_id}
+      />
     </div>
   )
 }

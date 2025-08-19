@@ -23,13 +23,13 @@ export function CreateIdeaDialog({ isOpen, onClose, onIdeaCreated, projects }: C
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || !content.trim()) return
+    if (!title.trim()) return
 
     setCreating(true)
     try {
       const idea = await ideasAPI.create({
         title: title.trim(),
-        content: content.trim(),
+        content: content.trim() || '--',
         project_id: projectId || null,
         status: 'new',
         tags,
@@ -96,16 +96,15 @@ export function CreateIdeaDialog({ isOpen, onClose, onIdeaCreated, projects }: C
 
           <div>
             <label htmlFor="content" className="block text-sm font-medium mb-2">
-              Description *
+              Description
             </label>
             <textarea
               id="content"
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder="Describe your idea in detail..."
+              placeholder="Describe your idea in detail... (optional)"
               className="w-full p-3 border border-input rounded-md bg-background resize-none"
               rows={4}
-              required
             />
           </div>
 
@@ -181,7 +180,7 @@ export function CreateIdeaDialog({ isOpen, onClose, onIdeaCreated, projects }: C
             <Button type="button" variant="outline" onClick={handleClose} disabled={creating}>
               Cancel
             </Button>
-            <Button type="submit" disabled={creating || !title.trim() || !content.trim()}>
+            <Button type="submit" disabled={creating || !title.trim()}>
               {creating ? 'Creating...' : 'Create Idea'}
             </Button>
           </div>
