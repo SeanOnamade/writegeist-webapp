@@ -137,65 +137,88 @@ export function ChapterEditor({
     return lastSaved.toLocaleDateString()
   }
 
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
   return (
     <div className="flex flex-col h-full">
       {/* Editor Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur">
-        <div className="flex items-center space-x-4">
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Chapter title"
-            className="font-semibold text-lg border-none shadow-none p-0 h-auto"
-          />
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as Chapter['status'])}
-            className="px-3 py-1 text-sm border border-input rounded-md bg-background"
-          >
-            <option value="draft">Draft</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="published">Published</option>
-          </select>
+      <div className="border-b bg-background/95 backdrop-blur">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 flex-1 min-w-0">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Chapter title"
+              className="font-semibold text-base sm:text-lg border-none shadow-none p-0 h-auto flex-1"
+            />
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as Chapter['status'])}
+              className="px-3 py-1 text-sm border border-input rounded-md bg-background"
+            >
+              <option value="draft">Draft</option>
+              <option value="in_progress">In Progress</option>
+              <option value="completed">Completed</option>
+              <option value="published">Published</option>
+            </select>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span className="hidden sm:inline">{wordCount.toLocaleString()} words</span>
+              <span className="sm:hidden">{wordCount} words</span>
+              <span className="hidden sm:inline">
+                {hasUnsavedChanges ? (
+                  <span className="text-orange-600">Unsaved changes</span>
+                ) : (
+                  <span>Saved {formatLastSaved()}</span>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline" 
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="lg:hidden"
+              >
+                Stats
+              </Button>
+              {onCancel && (
+                <Button variant="outline" onClick={handleCancel} size="sm">
+                  Cancel
+                </Button>
+              )}
+              <Button 
+                onClick={handleManualSave} 
+                disabled={saving || !hasUnsavedChanges}
+                size="sm"
+              >
+                {saving ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </div>
         </div>
         
-        <div className="flex items-center space-x-4">
-          <div className="text-sm text-muted-foreground">
-            {wordCount.toLocaleString()} words
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {hasUnsavedChanges ? (
-              <span className="text-orange-600">Unsaved changes</span>
-            ) : (
-              <span>Saved {formatLastSaved()}</span>
-            )}
-          </div>
-          <div className="flex space-x-2">
-            {onCancel && (
-              <Button variant="outline" onClick={handleCancel}>
-                Cancel
-              </Button>
-            )}
-            <Button 
-              onClick={handleManualSave} 
-              disabled={saving || !hasUnsavedChanges}
-            >
-              {saving ? 'Saving...' : 'Save'}
-            </Button>
-          </div>
+        {/* Mobile save status */}
+        <div className="sm:hidden px-4 pb-2 text-xs text-muted-foreground">
+          {hasUnsavedChanges ? (
+            <span className="text-orange-600">• Unsaved changes</span>
+          ) : (
+            <span>• Saved {formatLastSaved()}</span>
+          )}
         </div>
       </div>
 
       {/* Editor Content */}
-      <div className="flex-1 flex">
+      <div className="flex-1 flex relative">
         {/* Main Editor */}
         <div className="flex-1 flex flex-col">
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Start writing your chapter..."
-            className="flex-1 p-6 border-none resize-none focus:outline-none bg-background text-foreground leading-relaxed"
+            className="flex-1 p-4 sm:p-6 border-none resize-none focus:outline-none bg-background text-foreground leading-relaxed"
             style={{ 
               fontSize: '16px',
               lineHeight: '1.6',
@@ -204,89 +227,177 @@ export function ChapterEditor({
           />
         </div>
 
-        {/* Writing Stats Sidebar */}
-        <div className="w-64 border-l bg-muted/30 p-4">
-          <h3 className="font-semibold mb-4">Writing Stats</h3>
-          
-          <div className="space-y-4">
-            <div>
-              <div className="text-sm text-muted-foreground">Word Count</div>
-              <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
-            </div>
+        {/* Desktop Writing Stats Sidebar */}
+        <div className="hidden lg:flex lg:w-64 border-l bg-muted/30 p-4">
+          <div className="w-full">
+            <h3 className="font-semibold mb-4">Writing Stats</h3>
             
-            <div>
-              <div className="text-sm text-muted-foreground">Character Count</div>
-              <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
-            </div>
-            
-            <div>
-              <div className="text-sm text-muted-foreground">Paragraphs</div>
-              <div className="text-lg font-semibold">
-                {content.split('\n\n').filter(p => p.trim().length > 0).length}
+            <div className="space-y-4">
+              <div>
+                <div className="text-sm text-muted-foreground">Word Count</div>
+                <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-muted-foreground">Character Count</div>
+                <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-muted-foreground">Paragraphs</div>
+                <div className="text-lg font-semibold">
+                  {content.split('\n\n').filter(p => p.trim().length > 0).length}
+                </div>
+              </div>
+              
+              <div>
+                <div className="text-sm text-muted-foreground">Reading Time</div>
+                <div className="text-lg font-semibold">
+                  {Math.ceil(wordCount / 200)} min
+                </div>
               </div>
             </div>
-            
-            <div>
-              <div className="text-sm text-muted-foreground">Reading Time</div>
-              <div className="text-lg font-semibold">
-                {Math.ceil(wordCount / 200)} min
+
+            <div className="mt-8">
+              <h4 className="font-semibold mb-2">Chapter Status</h4>
+              <div className="space-y-2">
+                {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
+                  <label key={statusOption} className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="status"
+                      value={statusOption}
+                      checked={status === statusOption}
+                      onChange={(e) => setStatus(e.target.value as Chapter['status'])}
+                      className="rounded"
+                    />
+                    <span className="text-sm capitalize">{statusOption.replace('_', ' ')}</span>
+                  </label>
+                ))}
               </div>
             </div>
-          </div>
 
-          <div className="mt-8">
-            <h4 className="font-semibold mb-2">Chapter Status</h4>
-            <div className="space-y-2">
-              {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
-                <label key={statusOption} className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    name="status"
-                    value={statusOption}
-                    checked={status === statusOption}
-                    onChange={(e) => setStatus(e.target.value as Chapter['status'])}
-                    className="rounded"
-                  />
-                  <span className="text-sm capitalize">{statusOption.replace('_', ' ')}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <h4 className="font-semibold mb-2">Quick Actions</h4>
-            <div className="space-y-2">
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                📊 Analyze Chapter
-              </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                🎵 Generate Audio
-              </Button>
-              <Button variant="outline" size="sm" className="w-full justify-start">
-                💡 Get AI Suggestions
-              </Button>
+            <div className="mt-8">
+              <h4 className="font-semibold mb-2">Quick Actions</h4>
+              <div className="space-y-2">
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  📊 Analyze Chapter
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  🎵 Generate Audio
+                </Button>
+                <Button variant="outline" size="sm" className="w-full justify-start">
+                  💡 Get AI Suggestions
+                </Button>
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Mobile Stats Overlay */}
+        {sidebarOpen && (
+          <div className="lg:hidden absolute inset-0 z-50 flex">
+            <div 
+              className="flex-1 bg-black/20" 
+              onClick={() => setSidebarOpen(false)}
+            />
+            <div className="w-80 max-w-[90vw] border-l bg-background p-4 shadow-xl overflow-y-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold">Writing Stats</h3>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-1 h-6 w-6"
+                >
+                  ✕
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">Word Count</div>
+                  <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Character Count</div>
+                  <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Paragraphs</div>
+                  <div className="text-lg font-semibold">
+                    {content.split('\n\n').filter(p => p.trim().length > 0).length}
+                  </div>
+                </div>
+                
+                <div>
+                  <div className="text-sm text-muted-foreground">Reading Time</div>
+                  <div className="text-lg font-semibold">
+                    {Math.ceil(wordCount / 200)} min
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h4 className="font-semibold mb-2">Chapter Status</h4>
+                <div className="space-y-2">
+                  {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
+                    <label key={statusOption} className="flex items-center space-x-2">
+                      <input
+                        type="radio"
+                        name="mobile-status"
+                        value={statusOption}
+                        checked={status === statusOption}
+                        onChange={(e) => setStatus(e.target.value as Chapter['status'])}
+                        className="rounded"
+                      />
+                      <span className="text-sm capitalize">{statusOption.replace('_', ' ')}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-8">
+                <h4 className="font-semibold mb-2">Quick Actions</h4>
+                <div className="space-y-2">
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    📊 Analyze Chapter
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    🎵 Generate Audio
+                  </Button>
+                  <Button variant="outline" size="sm" className="w-full justify-start">
+                    💡 Get AI Suggestions
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Status Bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-t bg-muted/50 text-sm text-muted-foreground">
-        <div className="flex items-center space-x-4">
-          <span>Chapter {chapter.order_index}</span>
-          <span>•</span>
-          <span>{wordCount} words</span>
-          <span>•</span>
-          <span>{content.length} characters</span>
-        </div>
-        <div className="flex items-center space-x-4">
-          {autoSave && (
-            <span className="flex items-center space-x-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-              <span>Auto-save enabled</span>
-            </span>
-          )}
-          <span>Ctrl+S to save</span>
+      <div className="border-t bg-muted/50 text-sm text-muted-foreground flex-shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-2 px-4 py-2">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <span className="flex-shrink-0">Ch. {chapter.order_index}</span>
+            <span className="hidden sm:inline flex-shrink-0">•</span>
+            <span className="flex-shrink-0">{wordCount} words</span>
+            <span className="hidden sm:inline flex-shrink-0">•</span>
+            <span className="hidden sm:inline flex-shrink-0">{content.length} chars</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm">
+            {autoSave && (
+              <span className="flex items-center gap-1 flex-shrink-0">
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="hidden sm:inline">Auto-save enabled</span>
+                <span className="sm:hidden">Auto-save</span>
+              </span>
+            )}
+            <span className="hidden sm:inline flex-shrink-0">Ctrl+S to save</span>
+          </div>
         </div>
       </div>
     </div>

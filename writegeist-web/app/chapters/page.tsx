@@ -163,19 +163,19 @@ function ChaptersContent() {
           <span className="text-foreground">Chapters</span>
         </nav>
         
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Chapters</h1>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Chapters</h1>
             <p className="text-muted-foreground">
               Manage chapters for &quot;{project.title}&quot;
             </p>
           </div>
-          <div className="flex space-x-2">
-            <Button variant="outline" size="sm" onClick={handleRefresh}>
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} className="w-full sm:w-auto">
               🔄 Refresh
             </Button>
-            <Link href={`/project/${project.id}`}>
-              <Button variant="outline">Back to Project</Button>
+            <Link href={`/project/${project.id}`} className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto">Back to Project</Button>
             </Link>
           </div>
         </div>

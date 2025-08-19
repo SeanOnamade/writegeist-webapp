@@ -133,7 +133,7 @@ export function ChapterList({
     <div className="space-y-4">
       {/* Create New Chapter */}
       <div className="bg-card border rounded-lg p-4">
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Input
             value={newChapterTitle}
             onChange={(e) => setNewChapterTitle(e.target.value)}
@@ -148,6 +148,7 @@ export function ChapterList({
           <Button 
             onClick={handleCreateChapter}
             disabled={creating || !newChapterTitle.trim()}
+            className="w-full sm:w-auto"
           >
             {creating ? 'Creating...' : 'Add Chapter'}
           </Button>
@@ -178,26 +179,28 @@ export function ChapterList({
                   draggedChapter === chapter.id ? 'opacity-50' : ''
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="text-sm text-muted-foreground font-mono">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-start space-x-3 sm:space-x-4 flex-1 min-w-0">
+                    <div className="text-sm text-muted-foreground font-mono flex-shrink-0">
                       {(chapter.order_index || 0).toString().padStart(2, '0')}
                     </div>
-                    <div>
-                      <h3 className="font-semibold">{chapter.title}</h3>
-                      <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                        <span>{(chapter.word_count || 0).toLocaleString()} words</span>
-                        <span>Updated {formatDate(chapter.updated_at)}</span>
-                        <span className={`px-2 py-1 text-xs rounded-full border ${getStatusColor(chapter.status)}`}>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
+                        <h3 className="font-semibold truncate">{chapter.title}</h3>
+                        <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getStatusColor(chapter.status)} flex-shrink-0`}>
                           {chapter.status.replace('_', ' ')}
                         </span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 text-sm text-muted-foreground">
+                        <span className="flex-shrink-0">{(chapter.word_count || 0).toLocaleString()} words</span>
+                        <span className="flex-shrink-0">Updated {formatDate(chapter.updated_at)}</span>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
-                    <Link href={`/chapters/${chapter.id}`}>
-                      <Button variant="outline" size="sm">
+                  <div className="flex items-center gap-2 sm:gap-2 sm:flex-shrink-0">
+                    <Link href={`/chapters/${chapter.id}`} className="flex-1 sm:flex-initial">
+                      <Button variant="outline" size="sm" className="w-full sm:w-auto">
                         Edit
                       </Button>
                     </Link>
@@ -205,7 +208,7 @@ export function ChapterList({
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteChapter(chapter)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive flex-1 sm:flex-initial"
                     >
                       Delete
                     </Button>

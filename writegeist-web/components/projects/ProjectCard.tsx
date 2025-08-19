@@ -150,12 +150,12 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-sm text-muted-foreground">
-            <div className="flex space-x-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between text-sm text-muted-foreground gap-2 sm:gap-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
               <span>{project.chapter_count} chapters</span>
               <span>{(project.word_count || 0).toLocaleString()} words</span>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs sm:text-sm">
               <span>Created {formatDate(project.created_at)}</span>
               {project.updated_at !== project.created_at && (
                 <span>Updated {formatDate(project.updated_at)}</span>

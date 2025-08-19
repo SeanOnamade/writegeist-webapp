@@ -86,23 +86,44 @@ export default function ChapterEditPage() {
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur">
-        <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-          <Link href="/project" className="hover:text-foreground">Projects</Link>
-          <span>/</span>
-          <Link href={`/project/${project.id}`} className="hover:text-foreground">{project.title}</Link>
-          <span>/</span>
-          <Link href={`/chapters?project=${project.id}`} className="hover:text-foreground">Chapters</Link>
-          <span>/</span>
-          <span className="text-foreground">{chapter.title}</span>
-        </nav>
+      <div className="border-b bg-background/95 backdrop-blur">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-4">
+          <nav className="flex items-center space-x-1 sm:space-x-2 text-sm text-muted-foreground overflow-hidden">
+            <Link href="/project" className="hover:text-foreground flex-shrink-0">Projects</Link>
+            <span className="flex-shrink-0">/</span>
+            <Link 
+              href={`/project/${project.id}`} 
+              className="hover:text-foreground truncate max-w-[120px] sm:max-w-none"
+              title={project.title}
+            >
+              {project.title}
+            </Link>
+            <span className="flex-shrink-0">/</span>
+            <Link 
+              href={`/chapters?project=${project.id}`} 
+              className="hover:text-foreground flex-shrink-0"
+            >
+              Chapters
+            </Link>
+            <span className="flex-shrink-0 hidden sm:inline">/</span>
+            <span className="text-foreground truncate hidden sm:block" title={chapter.title}>
+              {chapter.title}
+            </span>
+          </nav>
+          
+          <div className="flex items-center gap-2">
+            <Link href={`/chapters?project=${project.id}`}>
+              <Button variant="outline" size="sm">
+                <span className="hidden sm:inline">Back to Chapters</span>
+                <span className="sm:hidden">Back</span>
+              </Button>
+            </Link>
+          </div>
+        </div>
         
-        <div className="flex items-center space-x-2">
-          <Link href={`/chapters?project=${project.id}`}>
-            <Button variant="outline" size="sm">
-              Back to Chapters
-            </Button>
-          </Link>
+        {/* Mobile chapter title */}
+        <div className="sm:hidden px-4 pb-2 text-sm font-medium text-foreground">
+          {chapter.title}
         </div>
       </div>
 

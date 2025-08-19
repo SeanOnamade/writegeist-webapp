@@ -225,38 +225,40 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
   return (
     <div className="flex flex-col h-full">
       {/* Chat Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-muted/30">
-        <div>
-          <h2 className="font-semibold">
-            {session?.title || 'New Chat Session'}
-          </h2>
-          {selectedProjectId && (
-            <p className="text-sm text-muted-foreground">
-              Project: {getProjectName(selectedProjectId)}
-            </p>
+      <div className="border-b bg-muted/30">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 sm:p-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="font-semibold text-base sm:text-lg truncate">
+              {session?.title || 'New Chat Session'}
+            </h2>
+            {selectedProjectId && (
+              <p className="text-sm text-muted-foreground truncate">
+                Project: {getProjectName(selectedProjectId)}
+              </p>
+            )}
+          </div>
+          
+          {!session && (
+            <div className="flex items-center">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="px-3 py-1 text-sm border border-input rounded-md bg-background w-full sm:w-auto min-w-[150px]"
+              >
+                <option value="">General Chat</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+            </div>
           )}
         </div>
-        
-        {!session && (
-          <div className="flex items-center space-x-2">
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="px-3 py-1 text-sm border border-input rounded-md bg-background"
-            >
-              <option value="">General Chat</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.title}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-6xl mb-4">🤖</div>
@@ -293,7 +295,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
                 className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                  className={`max-w-[85%] sm:max-w-[80%] rounded-lg px-3 sm:px-4 py-2 ${
                     message.role === 'user'
                       ? 'bg-primary text-primary-foreground'
                       : 'bg-muted'
@@ -331,15 +333,15 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t">
-        <div className="flex items-end space-x-2">
+      <div className="p-3 sm:p-4 border-t">
+        <div className="flex items-end gap-2">
           <div className="flex-1">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyPress}
               placeholder="Ask me anything about your writing..."
-              className="w-full p-3 border border-input rounded-lg bg-background resize-none min-h-[44px] max-h-32"
+              className="w-full p-3 border border-input rounded-lg bg-background resize-none min-h-[44px] max-h-32 text-sm sm:text-base"
               rows={1}
               style={{ height: 'auto' }}
               onInput={(e) => {
@@ -352,14 +354,16 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
           <Button
             onClick={sendMessage}
             disabled={!input.trim() || thinking}
-            className="px-6"
+            className="px-3 sm:px-6 flex-shrink-0"
+            size="default"
           >
             {thinking ? '⏳' : 'Send'}
           </Button>
         </div>
-        <div className="flex items-center justify-between mt-2 text-xs text-muted-foreground">
-          <span>Press Enter to send, Shift+Enter for new line</span>
-          <span>{input.length}/2000</span>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mt-2 text-xs text-muted-foreground">
+          <span className="hidden sm:inline">Press Enter to send, Shift+Enter for new line</span>
+          <span className="sm:hidden">Enter to send, Shift+Enter for new line</span>
+          <span className="text-right sm:text-left">{input.length}/2000</span>
         </div>
       </div>
     </div>

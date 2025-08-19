@@ -64,31 +64,33 @@ export default function IngestPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold mb-2">Document Ingestion</h1>
-          <p className="text-muted-foreground">
-            Import and process documents to build your knowledge base
-          </p>
-        </div>
-        
-        {projects.length > 0 && (
-          <div className="flex items-center space-x-2">
-            <label className="text-sm font-medium">Default Project:</label>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="px-3 py-2 border border-input rounded-md bg-background"
-            >
-              <option value="">No Project</option>
-              {projects.map(project => (
-                <option key={project.id} value={project.id}>
-                  {project.title}
-                </option>
-              ))}
-            </select>
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">Document Ingestion</h1>
+            <p className="text-muted-foreground">
+              Import and process documents to build your knowledge base
+            </p>
           </div>
-        )}
+          
+          {projects.length > 0 && (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <label className="text-sm font-medium flex-shrink-0">Default Project:</label>
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="px-3 py-2 border border-input rounded-md bg-background w-full sm:w-auto"
+              >
+                <option value="">No Project</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
@@ -121,18 +123,18 @@ export default function IngestPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex space-x-1 mb-6">
+      <div className="flex flex-col sm:flex-row gap-1 sm:gap-1 mb-6">
         <Button
           variant={activeTab === 'upload' ? 'default' : 'ghost'}
           onClick={() => setActiveTab('upload')}
-          className="rounded-b-none"
+          className="rounded-b-none sm:rounded-b-none w-full sm:w-auto"
         >
           📤 Upload Documents
         </Button>
         <Button
           variant={activeTab === 'documents' ? 'default' : 'ghost'}
           onClick={() => setActiveTab('documents')}
-          className="rounded-b-none"
+          className="rounded-b-none sm:rounded-b-none w-full sm:w-auto"
         >
           📄 Document Library ({documents.length})
         </Button>

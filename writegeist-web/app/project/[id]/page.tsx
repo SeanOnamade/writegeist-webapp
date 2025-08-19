@@ -144,60 +144,63 @@ export default function ProjectDetailPage() {
       </nav>
 
       {/* Project Header */}
-      <div className="flex items-start justify-between mb-8">
-        <div className="flex-1">
-          {isEditing ? (
-            <div className="space-y-4 max-w-2xl">
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-2xl font-bold"
-                placeholder="Project title"
-              />
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Project description"
-                className="w-full p-3 border border-input rounded-md bg-background resize-none"
-                rows={3}
-              />
-              <div className="flex space-x-2">
-                <Button onClick={handleSave} disabled={!title.trim()}>
-                  Save Changes
-                </Button>
-                <Button variant="outline" onClick={handleCancel}>
-                  Cancel
-                </Button>
-              </div>
+      <div className="mb-8">
+        {isEditing ? (
+          <div className="space-y-4 max-w-2xl">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="text-2xl font-bold"
+              placeholder="Project title"
+            />
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Project description"
+              className="w-full p-3 border border-input rounded-md bg-background resize-none"
+              rows={3}
+            />
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button onClick={handleSave} disabled={!title.trim()}>
+                Save Changes
+              </Button>
+              <Button variant="outline" onClick={handleCancel}>
+                Cancel
+              </Button>
             </div>
-          ) : (
-            <div>
-              <div className="flex items-center space-x-4 mb-2">
-                <h1 className="text-3xl font-bold">{project.title}</h1>
-                <span className={`px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(project.status)}`}>
-                  {project.status}
-                </span>
-              </div>
-              {project.description && (
-                <p className="text-muted-foreground text-lg mb-4">{project.description}</p>
-              )}
-              <div className="flex items-center space-x-6 text-sm text-muted-foreground">
-                <span>Created {formatDate(project.created_at)}</span>
-                <span>Last updated {formatDate(project.updated_at)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-        
-        {!isEditing && (
-          <div className="flex space-x-2 ml-4">
-            <Button variant="outline" onClick={() => setIsEditing(true)}>
-              Edit Project
-            </Button>
-            <Link href={`/chapters?project=${project.id}`}>
-              <Button>Manage Chapters</Button>
-            </Link>
           </div>
+        ) : (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+              <div className="flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold">{project.title}</h1>
+                  <span className={`inline-block px-3 py-1 text-sm font-medium rounded-full border ${getStatusColor(project.status)}`}>
+                    {project.status}
+                  </span>
+                </div>
+                {project.description && (
+                  <p className="text-muted-foreground text-base sm:text-lg mb-4">{project.description}</p>
+                )}
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:flex-shrink-0">
+                <Button variant="outline" onClick={() => setIsEditing(true)} size="sm" className="sm:size-default">
+                  Edit Project
+                </Button>
+                <Link href={`/chapters?project=${project.id}`}>
+                  <Button size="sm" className="w-full sm:w-auto sm:size-default">
+                    Manage Chapters
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-6 text-sm text-muted-foreground">
+              <span>Created {formatDate(project.created_at)}</span>
+              <span>Updated {formatDate(project.updated_at)}</span>
+            </div>
+          </>
         )}
       </div>
 
