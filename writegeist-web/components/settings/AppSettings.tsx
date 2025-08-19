@@ -219,6 +219,9 @@ export function AppSettings() {
               Enable notifications
             </label>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Show notifications for auto-saves, word count goals, and writing reminders.
+          </p>
         </div>
 
         {message && (

@@ -139,19 +139,8 @@ function BillingSettings() {
 
         <div className="p-4 border rounded-lg">
           <h4 className="font-medium mb-2">Usage</h4>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span>Projects:</span>
-              <span>2 / 3</span>
-            </div>
-            <div className="flex justify-between">
-              <span>AI Requests:</span>
-              <span>45 / 100</span>
-            </div>
-            <div className="flex justify-between">
-              <span>Storage:</span>
-              <span>12 MB / 100 MB</span>
-            </div>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>Usage tracking will be available when billing is implemented.</p>
           </div>
         </div>
 

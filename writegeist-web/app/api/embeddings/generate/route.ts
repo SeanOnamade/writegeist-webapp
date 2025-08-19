@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getOpenAIApiKey } from '@/lib/api/openai-key'
 
 export async function POST(request: NextRequest) {
   try {
     const { chapterId, content, projectId } = await request.json()
     
-    const apiKey = process.env.OPENAI_API_KEY
+    const { apiKey } = await getOpenAIApiKey()
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API key not configured. Please add it in Settings.' },
         { status: 500 }
       )
     }

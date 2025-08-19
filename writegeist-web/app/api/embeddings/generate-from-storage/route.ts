@@ -2,15 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { chapterContentStorage } from '@/lib/storage/chapterContent'
 import OpenAI from 'openai'
+import { getOpenAIApiKey } from '@/lib/api/openai-key'
 
 export async function POST(request: NextRequest) {
   try {
     const { chapterId, projectId, filePath } = await request.json()
     
-    const apiKey = process.env.OPENAI_API_KEY
+    const { apiKey } = await getOpenAIApiKey()
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'OpenAI API key not configured' },
+        { error: 'OpenAI API key not configured. Please add it in Settings.' },
         { status: 500 }
       )
     }
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     console.log('Loaded content length:', content.length)
 
     // Generate embedding using OpenAI
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const openai = new OpenAI({ apiKey })
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input: content,

@@ -11,7 +11,7 @@ export function UserProfile() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [fullName, setFullName] = useState('')
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+
   const [message, setMessage] = useState('')
 
   useEffect(() => {
@@ -39,34 +39,17 @@ export function UserProfile() {
     setMessage('')
 
     try {
-      let avatarUrl = user.avatar_url
 
-      // Upload avatar if selected
-      if (avatarFile) {
-        const uploadResult = await api.uploadFile(
-          avatarFile, 
-          'user-avatars', 
-          `avatar_${Date.now()}.${avatarFile.name.split('.').pop()}`
-        )
-        
-        if (uploadResult.success && uploadResult.data) {
-          const urlResult = await api.getFileUrl('user-avatars', uploadResult.data)
-          if (urlResult.success) {
-            avatarUrl = urlResult.data || null
-          }
-        }
-      }
+
 
       // Update user profile
       const result = await api.updateUserProfile({
-        full_name: fullName || null,
-        avatar_url: avatarUrl
+        full_name: fullName || null
       })
 
       if (result.success) {
         setMessage('Profile updated successfully!')
         setUser(result.data || user)
-        setAvatarFile(null)
       } else {
         setMessage('Failed to update profile: ' + (result.error || 'Unknown error'))
       }
@@ -100,7 +83,7 @@ export function UserProfile() {
       <div>
         <h3 className="text-lg font-medium">Profile Information</h3>
         <p className="text-sm text-muted-foreground">
-          Update your personal information and profile picture.
+          Update your personal information.
         </p>
       </div>
 
@@ -134,30 +117,7 @@ export function UserProfile() {
           />
         </div>
 
-        <div>
-          <label htmlFor="avatar" className="block text-sm font-medium mb-2">
-            Profile Picture
-          </label>
-          <div className="flex items-center space-x-4">
-            {user.avatar_url && (
-              <img
-                src={user.avatar_url}
-                alt="Current avatar"
-                className="w-12 h-12 rounded-full object-cover"
-              />
-            )}
-            <Input
-              id="avatar"
-              type="file"
-              accept="image/*"
-              onChange={(e) => setAvatarFile(e.target.files?.[0] || null)}
-              className="flex-1"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            Upload a new profile picture (max 2MB, JPG/PNG/WebP)
-          </p>
-        </div>
+
 
         {message && (
           <div className={`p-3 rounded-md text-sm ${

@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     console.log('Deleted existing embeddings, generating new chunked embeddings...')
 
     // Generate embeddings for each chunk
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+    const openai = new OpenAI({ apiKey })
     const embeddingPromises = chunks.map(async (chunk, index) => {
       try {
         console.log(`Generating embedding for chunk ${index + 1}/${chunks.length} (${chunk.text.length} chars)`)

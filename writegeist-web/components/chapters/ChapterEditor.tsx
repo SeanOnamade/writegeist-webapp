@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Chapter } from '@/types/database'
@@ -25,7 +25,9 @@ export function ChapterEditor({
   const [content, setContent] = useState(chapter.content)
   const [status, setStatus] = useState(chapter.status)
   const [saving, setSaving] = useState(false)
-  const [lastSaved, setLastSaved] = useState<Date | null>(null)
+  const [lastSaved, setLastSaved] = useState<Date | null>(
+    chapter.updated_at ? new Date(chapter.updated_at) : null
+  )
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [wordCount, setWordCount] = useState(0)
 
@@ -34,6 +36,11 @@ export function ChapterEditor({
     const words = content.trim().split(/\s+/).filter(word => word.length > 0)
     setWordCount(words.length)
   }, [content])
+
+  // Initialize lastSaved when chapter changes
+  useEffect(() => {
+    setLastSaved(chapter.updated_at ? new Date(chapter.updated_at) : null)
+  }, [chapter.updated_at])
 
   // Track unsaved changes
   useEffect(() => {
@@ -80,18 +87,32 @@ export function ChapterEditor({
     return () => clearTimeout(timer)
   }, [autoSave, autoSaveInterval, hasUnsavedChanges, performSave])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts - using useRef to avoid dependency issues
+  const performSaveRef = useRef(performSave)
+  
+  useEffect(() => {
+    performSaveRef.current = performSave
+  }, [performSave])
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
-        performSave()
+        e.stopPropagation()
+        console.log('Ctrl+S detected - saving chapter...')
+        performSaveRef.current(true)
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown)
-    return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [performSave])
+    // Add to both document and window to ensure it's caught
+    document.addEventListener('keydown', handleKeyDown, true)
+    window.addEventListener('keydown', handleKeyDown, true)
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true)
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, []) // Empty deps - uses ref to avoid re-binding
 
   const handleManualSave = () => {
     performSave(true)
