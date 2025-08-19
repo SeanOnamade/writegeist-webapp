@@ -64,16 +64,18 @@ export function Header() {
   const mobileNavigation = navigation // Excludes Ingest as requested
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-50 border-b bg-background/98 backdrop-blur-md supports-[backdrop-filter]:bg-background/95 shadow-sm">
       <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-14 items-center">
           {/* Left: Logo */}
-          <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
-            <span className="text-xl font-bold">Writegeist</span>
-          </Link>
+          <div className="flex items-center">
+            <Link href="/" className="flex items-center space-x-2 flex-shrink-0">
+              <span className="text-xl font-bold">Writegeist</span>
+            </Link>
+          </div>
           
-          {/* Center: Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+          {/* Center: Desktop Navigation - Take remaining space */}
+          <nav className="hidden md:flex items-center justify-center flex-1 space-x-8">
             {desktopNavigation.map((item) => (
               <Link
                 key={item.name}
@@ -90,7 +92,7 @@ export function Header() {
           </nav>
           
           {/* Right: Search + Auth + Mobile Menu */}
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-4 flex-shrink-0">
             {/* Search */}
             {user && (
               <div className="hidden sm:block">

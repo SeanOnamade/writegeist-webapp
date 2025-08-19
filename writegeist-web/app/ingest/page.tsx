@@ -125,18 +125,18 @@ export default function IngestPage() {
       {/* Tabs */}
       <div className="flex flex-col sm:flex-row gap-1 sm:gap-1 mb-6">
         <Button
-          variant={activeTab === 'upload' ? 'default' : 'ghost'}
+          variant={activeTab === 'upload' ? 'default' : 'outline'}
           onClick={() => setActiveTab('upload')}
           className="rounded-b-none sm:rounded-b-none w-full sm:w-auto"
         >
-          📤 Upload Documents
+          Upload Documents
         </Button>
         <Button
-          variant={activeTab === 'documents' ? 'default' : 'ghost'}
+          variant={activeTab === 'documents' ? 'default' : 'outline'}
           onClick={() => setActiveTab('documents')}
           className="rounded-b-none sm:rounded-b-none w-full sm:w-auto"
         >
-          📄 Document Library ({documents.length})
+          Document Library ({documents.length})
         </Button>
       </div>
 

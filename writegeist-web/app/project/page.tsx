@@ -161,7 +161,7 @@ export default function ProjectPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-            className="px-3 py-2 border border-input rounded-md bg-background"
+            className="h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
           >
             <option value="all">All Status</option>
             <option value="draft">Draft</option>
@@ -171,7 +171,7 @@ export default function ProjectPage() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-            className="px-3 py-2 border border-input rounded-md bg-background"
+            className="h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
           >
             <option value="updated">Last Updated</option>
             <option value="created">Date Created</option>

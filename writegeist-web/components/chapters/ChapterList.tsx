@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Chapter } from '@/types/database'
@@ -13,6 +14,7 @@ interface ChapterListProps {
   onChapterUpdate: (chapter: Chapter) => void
   onChapterDelete: (chapterId: string) => void
   onChapterCreate: (chapter: Chapter) => void
+  navigateToEditor?: boolean
 }
 
 export function ChapterList({ 
@@ -20,8 +22,10 @@ export function ChapterList({
   projectId, 
   onChapterUpdate, 
   onChapterDelete, 
-  onChapterCreate 
+  onChapterCreate,
+  navigateToEditor = false
 }: ChapterListProps) {
+  const router = useRouter()
   const [creating, setCreating] = useState(false)
   const [newChapterTitle, setNewChapterTitle] = useState('')
   const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
@@ -43,6 +47,11 @@ export function ChapterList({
       if (newChapter) {
         onChapterCreate(newChapter)
         setNewChapterTitle('')
+        
+        // Navigate to editor if requested
+        if (navigateToEditor) {
+          router.push(`/chapters/${newChapter.id}`)
+        }
       }
     } catch (error) {
       console.error('Error creating chapter:', error)

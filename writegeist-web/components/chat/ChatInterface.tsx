@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { ChatSession, ChatMessage, Project } from '@/types/database'
 import { chatAPI } from '@/lib/api/chat'
 import { projectsAPI } from '@/lib/api/projects'
@@ -20,6 +21,8 @@ export function ChatInterface({ sessionId, projectId, onSessionCreated }: ChatIn
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [thinking, setThinking] = useState(false)
+  const [editingTitle, setEditingTitle] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -195,6 +198,44 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const handleStartEditTitle = () => {
+    setEditingTitle(true)
+    setNewTitle(session?.title || 'New Chat Session')
+  }
+
+  const handleSaveTitle = async () => {
+    if (!newTitle.trim()) {
+      setEditingTitle(false)
+      return
+    }
+
+    try {
+      if (session) {
+        // Update existing session
+        const success = await chatAPI.updateSessionTitle(session.id, newTitle.trim())
+        if (success) {
+          setSession(prev => prev ? { ...prev, title: newTitle.trim() } : null)
+          setEditingTitle(false)
+        }
+      } else {
+        // Create new session with custom title
+        const newSession = await chatAPI.createSession(newTitle.trim(), selectedProjectId)
+        if (newSession) {
+          setSession(newSession)
+          setEditingTitle(false)
+          onSessionCreated?.(newSession)
+        }
+      }
+    } catch (error) {
+      console.error('Error updating chat title:', error)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditingTitle(false)
+    setNewTitle('')
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -228,10 +269,45 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
       <div className="border-b bg-muted/30">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 sm:p-4">
           <div className="flex-1 min-w-0">
-            <h2 className="font-semibold text-base sm:text-lg truncate">
-              {session?.title || 'New Chat Session'}
-            </h2>
-            {selectedProjectId && (
+            {session && editingTitle ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="text-base sm:text-lg font-semibold h-8"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleSaveTitle()
+                    } else if (e.key === 'Escape') {
+                      handleCancelEdit()
+                    }
+                  }}
+                  autoFocus
+                />
+                <Button variant="ghost" size="sm" onClick={handleSaveTitle} className="h-8 px-2">
+                  ✓
+                </Button>
+                <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="h-8 px-2">
+                  ✕
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold text-base sm:text-lg truncate">
+                  {session?.title || 'New Chat Session'}
+                </h2>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleStartEditTitle}
+                  className="h-7 w-7 p-0 opacity-70 hover:opacity-100 hover:bg-muted transition-all text-sm"
+                  title="Rename chat"
+                >
+                  ✏️
+                </Button>
+              </div>
+            )}
+            {selectedProjectId && !editingTitle && (
               <p className="text-sm text-muted-foreground truncate">
                 Project: {getProjectName(selectedProjectId)}
               </p>
@@ -243,7 +319,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
               <select
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="px-3 py-1 text-sm border border-input rounded-md bg-background w-full sm:w-auto min-w-[150px]"
+                className="px-3 py-1 text-sm border border-input rounded-md bg-background w-full sm:w-auto min-w-[150px] cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
               >
                 <option value="">General Chat</option>
                 {projects.map(project => (

@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
+import { RefreshCw } from 'lucide-react'
 import { ChapterList } from '@/components/chapters/ChapterList'
 import type { Chapter, Project } from '@/types/database'
 import { chaptersAPI } from '@/lib/api/chapters'
@@ -172,7 +173,8 @@ function ChaptersContent() {
           </div>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-2">
             <Button variant="outline" size="sm" onClick={handleRefresh} className="w-full sm:w-auto">
-              🔄 Refresh
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
             </Button>
             <Link href={`/project/${project.id}`} className="w-full sm:w-auto">
               <Button variant="outline" className="w-full sm:w-auto">Back to Project</Button>
@@ -210,6 +212,7 @@ function ChaptersContent() {
         onChapterUpdate={handleChapterUpdate}
         onChapterDelete={handleChapterDelete}
         onChapterCreate={handleChapterCreate}
+        navigateToEditor={true}
       />
     </div>
   )
