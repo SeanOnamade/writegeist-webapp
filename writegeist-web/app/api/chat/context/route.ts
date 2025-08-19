@@ -93,13 +93,41 @@ export async function POST(request: NextRequest) {
         
         if (searchResponse.ok) {
           const searchData = await searchResponse.json()
-                     if (searchData.results && searchData.results.length > 0) {
-             context += "\n=== MOST RELEVANT CONTENT (Vector Search) ===\n"
-             searchData.results.forEach((result: any, index: number) => {
-               context += `\nRelevant Content ${index + 1} (${Math.round(result.similarity * 100)}% match):\n`
-               context += `${result.content_text}\n`
-             })
-             context += "\n"
+                               if (searchData.results && searchData.results.length > 0) {
+            context += "\n=== MOST RELEVANT CONTENT (Vector Search) ===\n"
+            
+            // Group results by chapter to provide better attribution
+            const resultsByChapter = new Map()
+            
+            for (const result of searchData.results) {
+              const chapterId = result.chapter_id
+              if (!resultsByChapter.has(chapterId)) {
+                resultsByChapter.set(chapterId, [])
+              }
+              resultsByChapter.get(chapterId).push(result)
+            }
+            
+            // Get chapter details for proper attribution
+            const chapterIds = Array.from(resultsByChapter.keys())
+            const { data: chapterDetails } = await supabase
+              .from('chapters')
+              .select('id, title, order_index')
+              .in('id', chapterIds)
+            
+            // Build context with proper chapter attribution
+            resultsByChapter.forEach((results, chapterId) => {
+              const chapterInfo = chapterDetails?.find(c => c.id === chapterId)
+              const chapterTitle = chapterInfo ? `Chapter ${chapterInfo.order_index}: ${chapterInfo.title}` : 'Unknown Chapter'
+              
+              context += `\n=== FROM ${chapterTitle.toUpperCase()} ===\n`
+              results.forEach((result: any, index: number) => {
+                context += `${result.content_text}\n`
+                if (index < results.length - 1) context += "\n"
+              })
+              context += "\n"
+            })
+            
+            context += "\n"
              console.log('Vector search found', searchData.results.length, 'results')
              console.log('First result similarity:', searchData.results[0]?.similarity)
              console.log('First result preview:', searchData.results[0]?.content_text?.substring(0, 200))

@@ -43,7 +43,9 @@ export async function POST(request: NextRequest) {
 PROJECT CONTEXT:
 ${projectContext}
 
-Use this context to provide specific, relevant advice about the user's current project. Reference characters, plot points, and story elements when relevant.`
+Use this context to provide specific, relevant advice about the user's current project. Reference characters, plot points, and story elements when relevant.
+
+IMPORTANT: When referencing specific content, always cite the correct chapter it comes from as shown in the context above. Pay close attention to the "FROM CHAPTER X" headers to ensure accurate attribution.`
       }
     }
 
