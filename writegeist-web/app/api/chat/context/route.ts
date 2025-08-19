@@ -5,12 +5,17 @@ export async function POST(request: NextRequest) {
   try {
     const { query, projectId, userId } = await request.json()
     
+    const supabase = await createClient()
+    
+    // Get the real authenticated user ID
+    const { data: { user }, error: userError } = await supabase.auth.getUser()
+    const realUserId = user?.id || userId || 'temp-user'
+    
     console.log('Chat context request:')
     console.log('- Query:', query)
     console.log('- Project ID:', projectId)
-    console.log('- User ID:', userId)
-    
-    const supabase = await createClient()
+    console.log('- User ID:', realUserId)
+    console.log('- Authenticated user:', user?.id || 'none')
     
     // First, try to get relevant context from the project
     let context = ""

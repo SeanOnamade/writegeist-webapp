@@ -170,7 +170,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
           temperature: 0.7,
           max_tokens: 500,
           projectId: session.project_id,
-          userId: 'temp-user' // TODO: Get real user ID from auth context
+          userId: session.user_id || 'temp-user' // Use real user ID from session
         })
       })
 
