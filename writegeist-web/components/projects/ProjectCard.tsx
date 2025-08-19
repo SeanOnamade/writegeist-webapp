@@ -164,15 +164,10 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
           </div>
 
           <div className="mt-4 pt-4 border-t">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-end">
               <Link href={`/project/${project.id}`}>
-                <Button variant="outline" size="sm">
-                  Open Project
-                </Button>
-              </Link>
-              <Link href={`/project/${project.id}/chapters`}>
                 <Button size="sm">
-                  View Chapters
+                  Open Project
                 </Button>
               </Link>
             </div>

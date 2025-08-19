@@ -247,7 +247,9 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {chapters.slice(0, 5).map(chapter => (
+            {chapters
+              .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+              .slice(0, 5).map(chapter => (
               <div key={chapter.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50">
                 <div>
                   <h3 className="font-medium">{chapter.title}</h3>

@@ -1,10 +1,29 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
+import { useUser } from '@/contexts/UserContext'
 
-export default function Home() {
+function AuthenticatedHome() {
+  // Redirect authenticated users to projects
+  useEffect(() => {
+    window.location.href = '/project'
+  }, [])
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+        <p className="text-muted-foreground">Redirecting to your projects...</p>
+      </div>
+    </div>
+  )
+}
+
+function UnauthenticatedHome() {
   return (
     <div className="min-h-screen bg-background">
-      
       <main className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
@@ -12,63 +31,95 @@ export default function Home() {
           </h1>
           <p className="mt-6 text-lg leading-8 text-muted-foreground">
             AI-powered writing assistant for managing your books, chapters, and creative projects.
-            Now available as a cloud-native web application with real-time collaboration.
+            Cloud-native web application with real-time collaboration and intelligent writing tools.
           </p>
           
           <div className="mt-10 flex items-center justify-center gap-x-6">
             <Button asChild size="lg">
-              <Link href="/project">Get Started</Link>
+              <Link href="/login">Sign In</Link>
             </Button>
             <Button variant="outline" size="lg" asChild>
-              <Link href="/chapters">View Chapters</Link>
+              <Link href="/signup">Create Account</Link>
             </Button>
           </div>
           
           <div className="mt-16">
-            <h2 className="text-2xl font-semibold mb-8">Migration Progress</h2>
+            <h2 className="text-2xl font-semibold mb-8">Features</h2>
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <div className="border rounded-lg p-6">
-                <h3 className="font-semibold text-green-600">✅ Completed</h3>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li>• Next.js project setup</li>
-                  <li>• Development environment</li>
-                  <li>• UI component migration</li>
-                  <li>• API client stubs</li>
-                  <li>• App Router structure</li>
-                </ul>
+                <div className="text-3xl mb-4">📚</div>
+                <h3 className="font-semibold mb-2">Project Management</h3>
+                <p className="text-sm text-muted-foreground">
+                  Organize your books, novels, and writing projects with intelligent chapter management and progress tracking.
+                </p>
               </div>
               
               <div className="border rounded-lg p-6">
-                <h3 className="font-semibold text-blue-600">🚧 In Progress</h3>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li>• Environment configuration</li>
-                  <li>• Supabase setup</li>
-                  <li>• Authentication scaffolding</li>
-                </ul>
+                <div className="text-3xl mb-4">🤖</div>
+                <h3 className="font-semibold mb-2">AI Writing Assistant</h3>
+                <p className="text-sm text-muted-foreground">
+                  Get contextual help with character development, plot consistency, and writing suggestions powered by AI.
+                </p>
               </div>
               
               <div className="border rounded-lg p-6">
-                <h3 className="font-semibold text-gray-600">⏳ Planned</h3>
-                <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-                  <li>• Database schema</li>
-                  <li>• Chapter management</li>
-                  <li>• AI integration</li>
-                  <li>• Real-time features</li>
-                  <li>• PWA support</li>
-                </ul>
+                <div className="text-3xl mb-4">🎯</div>
+                <h3 className="font-semibold mb-2">Smart Insights</h3>
+                <p className="text-sm text-muted-foreground">
+                  Vector-powered search through your content, idea management, and intelligent story analysis.
+                </p>
+              </div>
+              
+              <div className="border rounded-lg p-6">
+                <div className="text-3xl mb-4">🔊</div>
+                <h3 className="font-semibold mb-2">Audio Narration</h3>
+                <p className="text-sm text-muted-foreground">
+                  Generate high-quality audio narration of your chapters with text-to-speech technology.
+                </p>
+              </div>
+              
+              <div className="border rounded-lg p-6">
+                <div className="text-3xl mb-4">☁️</div>
+                <h3 className="font-semibold mb-2">Cloud Sync</h3>
+                <p className="text-sm text-muted-foreground">
+                  Access your work from anywhere with real-time synchronization and collaborative features.
+                </p>
+              </div>
+              
+              <div className="border rounded-lg p-6">
+                <div className="text-3xl mb-4">📊</div>
+                <h3 className="font-semibold mb-2">Writing Analytics</h3>
+                <p className="text-sm text-muted-foreground">
+                  Track your writing progress, word counts, and productivity metrics to stay motivated.
+                </p>
               </div>
             </div>
           </div>
           
           <div className="mt-16 text-center">
             <p className="text-sm text-muted-foreground">
-              This is the web version of Writegeist, migrated from the Electron desktop app.
-              <br />
-              All your favorite features will be available with enhanced cloud capabilities.
+              Start your writing journey today. Create an account to access all features.
             </p>
           </div>
         </div>
       </main>
     </div>
   )
+}
+
+export default function Home() {
+  const { user, loading } = useUser()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  return user ? <AuthenticatedHome /> : <UnauthenticatedHome />
 }

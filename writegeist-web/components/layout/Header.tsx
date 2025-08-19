@@ -11,7 +11,6 @@ import type { User } from '@supabase/supabase-js'
 const navigation = [
   { name: 'Home', href: '/' },
   { name: 'Project', href: '/project' },
-  { name: 'Chapters', href: '/chapters' },
   { name: 'Ingest', href: '/ingest' },
   { name: 'Ideas', href: '/ideas' },
   { name: 'Chat', href: '/chat' },
