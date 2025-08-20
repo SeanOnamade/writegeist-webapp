@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { IdeasSearchModal } from '@/components/ideas/IdeasSearchModal'
+import { SimpleRichTextEditor } from './SimpleRichTextEditor'
 import type { Chapter } from '@/types/database'
 import { chaptersAPI } from '@/lib/api/chapters'
 
@@ -33,6 +34,7 @@ export function ChapterEditor({
   )
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [wordCount, setWordCount] = useState(0)
+  const [editorError, setEditorError] = useState(false)
 
   // Calculate word count
   useEffect(() => {
@@ -53,13 +55,20 @@ export function ChapterEditor({
     setHasUnsavedChanges(hasChanges)
   }, [title, content, status, chapter])
 
-  // Auto-save functionality
+  // Auto-save functionality with enhanced error handling
   const performSave = useCallback(async (showLoading = true) => {
     if (!hasUnsavedChanges) return
 
     if (showLoading) setSaving(true)
     
     try {
+      // Validate content before saving
+      if (typeof content !== 'string') {
+        throw new Error('Invalid content format')
+      }
+
+      // Debug: Saving chapter content
+
       const updatedChapter = await chaptersAPI.save({
         ...chapter,
         title: title.trim(),
@@ -68,12 +77,15 @@ export function ChapterEditor({
       })
 
       if (updatedChapter) {
+        // Debug: Chapter saved successfully
         onSave(updatedChapter)
         setLastSaved(new Date())
         setHasUnsavedChanges(false)
+        setEditorError(false)
       }
     } catch (error) {
       console.error('Error saving chapter:', error)
+      setEditorError(true)
     } finally {
       if (showLoading) setSaving(false)
     }
@@ -99,21 +111,20 @@ export function ChapterEditor({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
         e.preventDefault()
         e.stopPropagation()
-        console.log('Ctrl+S detected - saving chapter...')
+        // Debug: Ctrl+S detected
+        // Direct save call is more reliable than trying to find the button
         performSaveRef.current(true)
       }
     }
 
-    // Add to both document and window to ensure it's caught
-    document.addEventListener('keydown', handleKeyDown, true)
-    window.addEventListener('keydown', handleKeyDown, true)
+    // Use capture phase and high priority
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false })
     
     return () => {
-      document.removeEventListener('keydown', handleKeyDown, true)
-      window.removeEventListener('keydown', handleKeyDown, true)
+      document.removeEventListener('keydown', handleKeyDown, { capture: true })
     }
   }, []) // Empty deps - uses ref to avoid re-binding
 
@@ -121,10 +132,19 @@ export function ChapterEditor({
     performSave(true)
   }
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to cancel?')) {
       return
     }
+    
+    // If there are unsaved changes, save them before canceling
+    if (hasUnsavedChanges) {
+      // Auto-saving before cancel
+      await performSave(false)
+      // Add small delay to ensure save completes
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+    
     onCancel?.()
   }
 
@@ -240,16 +260,17 @@ export function ChapterEditor({
       <div className="flex-1 flex relative">
         {/* Main Editor */}
         <div className="flex-1 flex flex-col">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
+          {editorError && (
+            <div className="mx-4 mt-2 p-2 bg-destructive/10 border border-destructive rounded text-sm text-destructive">
+              ⚠️ Editor encountered an issue. Try refreshing if problems persist.
+            </div>
+          )}
+          
+          <SimpleRichTextEditor
+            content={content}
+            onChange={setContent}
             placeholder="Start writing your chapter..."
-            className="flex-1 p-4 sm:p-6 border-none resize-none focus:outline-none bg-background text-foreground leading-relaxed"
-            style={{ 
-              fontSize: '16px',
-              lineHeight: '1.6',
-              fontFamily: 'ui-serif, Georgia, Cambria, "Times New Roman", Times, serif'
-            }}
+            disabled={saving}
           />
         </div>
 

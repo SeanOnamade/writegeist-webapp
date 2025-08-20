@@ -26,8 +26,10 @@ export default function ChapterEditPage() {
 
   const loadChapter = async () => {
     try {
+      // Load chapter data with cache busting for fresh content
       const chapterData = await chaptersAPI.getById(chapterId)
       if (chapterData) {
+        // Debug: Successfully loaded chapter data
         setChapter(chapterData)
         
         // Load project data

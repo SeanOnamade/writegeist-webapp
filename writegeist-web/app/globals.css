@@ -58,3 +58,53 @@ button:disabled,
 [aria-disabled="true"] {
   cursor: not-allowed;
 }
+
+/* Rich Text Editor Styles */
+[contenteditable] ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 1rem 0;
+  color: var(--color-foreground);
+}
+
+[contenteditable] li {
+  color: var(--color-foreground);
+  margin: 0.25rem 0;
+  display: list-item;
+}
+
+[contenteditable] strong {
+  font-weight: bold;
+  color: var(--color-foreground);
+}
+
+[contenteditable] em {
+  font-style: italic;
+  color: var(--color-foreground);
+}
+
+[contenteditable] u {
+  text-decoration: underline;
+  color: var(--color-foreground);
+}
+
+/* Preserve exact spacing for rich text editor */
+[contenteditable] {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+[contenteditable] p {
+  margin: 0;
+  color: var(--color-foreground);
+  display: block;
+}
+
+[contenteditable] p:not(:last-child) {
+  margin-bottom: 1em;
+}
+
+/* Don't add extra spacing - let the HTML structure control it */
+[contenteditable] > * + * {
+  /* No extra margins */
+}
