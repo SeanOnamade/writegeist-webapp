@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { UserProfile } from '@/components/settings/UserProfile'
 import { AppSettings } from '@/components/settings/AppSettings'
+import { StorageUsage } from '@/components/settings/StorageUsage'
 import { Button } from '@/components/ui/button'
 
 type SettingsTab = 'profile' | 'app' | 'data' | 'billing'
@@ -87,6 +88,14 @@ function DataSettings() {
       </div>
 
       <div className="space-y-4">
+        <div className="p-4 border rounded-lg">
+          <h4 className="font-medium mb-2">Storage Usage</h4>
+          <p className="text-sm text-muted-foreground mb-3">
+            Monitor your storage usage across different content types.
+          </p>
+          <StorageUsage />
+        </div>
+
         <div className="p-4 border rounded-lg">
           <h4 className="font-medium mb-2">Export Data</h4>
           <p className="text-sm text-muted-foreground mb-3">

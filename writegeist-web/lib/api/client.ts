@@ -285,6 +285,68 @@ export class APIClient {
       }
     }
   }
+
+  // Storage operations
+  async getStorageUsage(): Promise<APIResponse<{
+    byBucket: Record<string, { count: number; size: number }>
+    total: { count: number; size: number }
+  }>> {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        return { success: false, error: 'User not authenticated' }
+      }
+
+      const buckets = ['audio-files', 'documents', 'user-avatars', 'chapter-content']
+      const storageData: Record<string, { count: number; size: number }> = {}
+      let totalSize = 0
+      let totalCount = 0
+
+      // Get storage usage for each bucket
+      for (const bucket of buckets) {
+        try {
+          const { data: files, error } = await supabase.storage
+            .from(bucket)
+            .list(user.id, {
+              limit: 1000,
+              sortBy: { column: 'created_at', order: 'desc' }
+            })
+
+          if (!error && files) {
+            const bucketSize = files.reduce((acc, file) => {
+              return acc + (file.metadata?.size || 0)
+            }, 0)
+            
+            storageData[bucket] = {
+              count: files.length,
+              size: bucketSize
+            }
+            
+            totalSize += bucketSize
+            totalCount += files.length
+          } else {
+            storageData[bucket] = { count: 0, size: 0 }
+          }
+        } catch (bucketError) {
+          console.warn(`Failed to get storage for ${bucket}:`, bucketError)
+          storageData[bucket] = { count: 0, size: 0 }
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          byBucket: storageData,
+          total: { count: totalCount, size: totalSize }
+        }
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to get storage usage'
+      }
+    }
+  }
 }
 
 // Create singleton instance
