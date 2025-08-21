@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { IdeaCard } from '@/components/ideas/IdeaCard'
 import { CreateIdeaDialog } from '@/components/ideas/CreateIdeaDialog'
+import { IdeaDetailModal } from '@/components/ideas/IdeaDetailModal'
 import type { Idea, Project } from '@/types/database'
 import { ideasAPI } from '@/lib/api/ideas'
 import { projectsAPI } from '@/lib/api/projects'
@@ -20,6 +21,8 @@ export default function IdeasPage() {
   const [tagFilter, setTagFilter] = useState<string>('all')
   const [sortBy, setSortBy] = useState<'updated' | 'created' | 'title'>('updated')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [selectedIdea, setSelectedIdea] = useState<Idea | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -44,43 +47,52 @@ export default function IdeasPage() {
     }
   }
 
-  const filterAndSortIdeas = () => {
+  // Enhanced filtering with instant updates
+  const performFilteringWithParams = (
+    query: string,
+    status: typeof statusFilter,
+    project: string,
+    tag: string,
+    sort: typeof sortBy
+  ) => {
     let filtered = ideas
 
     // Apply search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
+    if (query.trim()) {
+      const queryLower = query.toLowerCase()
       filtered = filtered.filter(idea =>
-        idea.title.toLowerCase().includes(query) ||
-        idea.content.toLowerCase().includes(query) ||
-        idea.tags.some(tag => tag.toLowerCase().includes(query))
+        idea.title.toLowerCase().includes(queryLower) ||
+        idea.content.toLowerCase().includes(queryLower) ||
+        idea.tags.some(tag => tag.toLowerCase().includes(queryLower))
       )
     }
 
     // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(idea => idea.status === statusFilter)
+    if (status !== 'all') {
+      filtered = filtered.filter(idea => idea.status === status)
     }
 
     // Apply project filter
-    if (projectFilter !== 'all') {
-      if (projectFilter === 'unlinked') {
+    if (project !== 'all') {
+      if (project === 'unlinked') {
         filtered = filtered.filter(idea => !idea.project_id)
       } else {
-        filtered = filtered.filter(idea => idea.project_id === projectFilter)
+        filtered = filtered.filter(idea => idea.project_id === project)
       }
     }
 
     // Apply tag filter
-    if (tagFilter !== 'all') {
-      filtered = filtered.filter(idea => idea.tags.includes(tagFilter))
+    if (tag !== 'all') {
+      filtered = filtered.filter(idea => idea.tags.includes(tag))
     }
 
-    // Apply sorting
+    // Apply sorting (fixed A-Z sorting)
     filtered.sort((a, b) => {
-      switch (sortBy) {
+      switch (sort) {
         case 'title':
-          return a.title.localeCompare(b.title)
+          const titleA = a.title.toLowerCase().trim()
+          const titleB = b.title.toLowerCase().trim()
+          return titleA.localeCompare(titleB)
         case 'created':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         case 'updated':
@@ -92,16 +104,60 @@ export default function IdeasPage() {
     setFilteredIdeas(filtered)
   }
 
+  const filterAndSortIdeas = () => {
+    performFilteringWithParams(searchQuery, statusFilter, projectFilter, tagFilter, sortBy)
+  }
+
+  // Instant filter handlers
+  const handleSortChange = (newSortBy: typeof sortBy) => {
+    setSortBy(newSortBy)
+    performFilteringWithParams(searchQuery, statusFilter, projectFilter, tagFilter, newSortBy)
+  }
+
+  const handleStatusFilterChange = (newStatusFilter: typeof statusFilter) => {
+    setStatusFilter(newStatusFilter)
+    performFilteringWithParams(searchQuery, newStatusFilter, projectFilter, tagFilter, sortBy)
+  }
+
+  const handleProjectFilterChange = (newProjectFilter: string) => {
+    setProjectFilter(newProjectFilter)
+    performFilteringWithParams(searchQuery, statusFilter, newProjectFilter, tagFilter, sortBy)
+  }
+
+  const handleTagFilterChange = (newTagFilter: string) => {
+    setTagFilter(newTagFilter)
+    performFilteringWithParams(searchQuery, statusFilter, projectFilter, newTagFilter, sortBy)
+  }
+
   const handleIdeaCreated = (idea: Idea) => {
     setIdeas(prev => [idea, ...prev])
   }
 
   const handleIdeaUpdated = (updatedIdea: Idea) => {
     setIdeas(prev => prev.map(i => i.id === updatedIdea.id ? updatedIdea : i))
+    // Update selected idea if it's currently being viewed
+    if (selectedIdea?.id === updatedIdea.id) {
+      setSelectedIdea(updatedIdea)
+    }
   }
 
   const handleIdeaDeleted = (ideaId: string) => {
     setIdeas(prev => prev.filter(i => i.id !== ideaId))
+    // Close detail modal if deleted idea was being viewed
+    if (selectedIdea?.id === ideaId) {
+      setSelectedIdea(null)
+      setShowDetailModal(false)
+    }
+  }
+
+  const handleShowDetail = (idea: Idea) => {
+    setSelectedIdea(idea)
+    setShowDetailModal(true)
+  }
+
+  const handleCloseDetail = () => {
+    setShowDetailModal(false)
+    setSelectedIdea(null)
   }
 
   const getAllTags = () => {
@@ -200,7 +256,7 @@ export default function IdeasPage() {
           <div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+              onChange={(e) => handleStatusFilterChange(e.target.value as typeof statusFilter)}
               className="w-full h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
             >
               <option value="all">All Status</option>
@@ -213,7 +269,7 @@ export default function IdeasPage() {
           <div>
             <select
               value={projectFilter}
-              onChange={(e) => setProjectFilter(e.target.value)}
+              onChange={(e) => handleProjectFilterChange(e.target.value)}
               className="w-full h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
             >
               <option value="all">All Projects</option>
@@ -228,7 +284,7 @@ export default function IdeasPage() {
           <div>
             <select
               value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
+              onChange={(e) => handleTagFilterChange(e.target.value)}
               className="w-full h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
             >
               <option value="all">All Tags</option>
@@ -242,7 +298,7 @@ export default function IdeasPage() {
           <div>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+              onChange={(e) => handleSortChange(e.target.value as typeof sortBy)}
               className="w-full h-9 px-3 py-1 text-sm border border-input rounded-md bg-background cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 transition-colors"
             >
               <option value="updated">Last Updated</option>
@@ -280,6 +336,7 @@ export default function IdeasPage() {
               idea={idea}
               onUpdate={handleIdeaUpdated}
               onDelete={handleIdeaDeleted}
+              onView={handleShowDetail}
             />
           ))}
         </div>
@@ -291,6 +348,14 @@ export default function IdeasPage() {
         onClose={() => setShowCreateDialog(false)}
         onIdeaCreated={handleIdeaCreated}
         projects={projects}
+      />
+
+      {/* Idea Detail Modal */}
+      <IdeaDetailModal
+        idea={selectedIdea}
+        isOpen={showDetailModal}
+        onClose={handleCloseDetail}
+        onUpdate={handleIdeaUpdated}
       />
     </div>
   )

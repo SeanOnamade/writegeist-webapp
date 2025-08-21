@@ -10,15 +10,17 @@ interface IdeaCardProps {
   idea: Idea
   onUpdate: (idea: Idea) => void
   onDelete: (ideaId: string) => void
+  onView?: (idea: Idea) => void
 }
 
-export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
+export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState(idea.title)
   const [content, setContent] = useState(idea.content)
   const [newTag, setNewTag] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const handleSave = async () => {
     if (!title.trim()) return
@@ -73,6 +75,20 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
       }
     } catch (error) {
       console.error('Error updating idea status:', error)
+    }
+  }
+
+  const handleQuickStatusUpdate = async (newStatus: Idea['status']) => {
+    setUpdatingStatus(true)
+    try {
+      const updatedIdea = await ideasAPI.updateStatus(idea.id, newStatus)
+      if (updatedIdea) {
+        onUpdate(updatedIdea)
+      }
+    } catch (error) {
+      console.error('Error updating idea status:', error)
+    } finally {
+      setUpdatingStatus(false)
     }
   }
 
@@ -151,8 +167,14 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
       ) : (
         <>
           <div className="flex items-start justify-between mb-3">
-            <div className="flex-1">
-              <h3 className="font-semibold text-lg mb-2">{idea.title}</h3>
+            <div className="flex-1 min-w-0">
+              <h3 
+                className="font-semibold text-lg mb-2 cursor-pointer hover:text-primary transition-colors break-words sm:truncate"
+                onClick={() => onView?.(idea)}
+                title={idea.title}
+              >
+                {idea.title}
+              </h3>
               {idea.content && idea.content !== '--' && (
                 <p className="text-muted-foreground text-sm line-clamp-3 mb-3">
                   {idea.content}
@@ -231,6 +253,40 @@ export function IdeaCard({ idea, onUpdate, onDelete }: IdeaCardProps) {
               >
                 Add
               </Button>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="mb-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickStatusUpdate('used')}
+                disabled={idea.status === 'used' || updatingStatus}
+                className="text-xs h-7 px-2 flex-1 sm:flex-initial"
+              >
+                {updatingStatus ? '...' : 'Mark as Used'}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuickStatusUpdate('archived')}
+                disabled={idea.status === 'archived' || updatingStatus}
+                className="text-xs h-7 px-2 flex-1 sm:flex-initial"
+              >
+                {updatingStatus ? '...' : 'Archive'}
+              </Button>
+              {onView && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onView(idea)}
+                  className="text-xs h-7 px-2 flex-1 sm:flex-initial"
+                >
+                  View Details
+                </Button>
+              )}
             </div>
           </div>
 
