@@ -53,6 +53,7 @@ export default function AudioPage() {
   const [loading, setLoading] = useState(true)
   const [generatingAudio, setGeneratingAudio] = useState<Set<string>>(new Set())
   const [readAlongModal, setReadAlongModal] = useState<{ isOpen: boolean, chapter: ChapterWithAudio | null }>({ isOpen: false, chapter: null })
+  const [apiKeyValidated, setApiKeyValidated] = useState<boolean | null>(null) // Cache validation result
 // Removed unused playingAudio state
   const { toast } = useToast()
 
@@ -88,9 +89,58 @@ export default function AudioPage() {
     loadAudioLibrary()
   }, [loadAudioLibrary])
 
+  // Validate API key before generation (with caching)
+  const validateAPIKey = async (): Promise<boolean> => {
+    // Use cached result if available (valid for 5 minutes)
+    if (apiKeyValidated !== null) {
+      return apiKeyValidated
+    }
+
+    try {
+      const response = await fetch('/api/audio/validate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      const result = await response.json()
+      
+      if (!result.valid) {
+        setApiKeyValidated(false)
+        toast({
+          title: "⚠️ OpenAI API Key Issue",
+          description: result.error || "Please check your OpenAI API key configuration.",
+          variant: "destructive",
+        })
+        return false
+      }
+
+      // Cache successful validation for 5 minutes
+      setApiKeyValidated(true)
+      setTimeout(() => setApiKeyValidated(null), 5 * 60 * 1000)
+
+      return true
+    } catch (error) {
+      console.error('API key validation error:', error)
+      setApiKeyValidated(false)
+      toast({
+        title: "⚠️ Cannot Validate API Key",
+        description: "Unable to verify your OpenAI API key. Generation may fail.",
+        variant: "destructive",
+      })
+      return false
+    }
+  }
+
   // Generate audio for a chapter
   const generateAudio = async (chapterId: string, chapterTitle: string, force: boolean = false) => {
     try {
+      // Validate API key first (before showing generating state)
+      const isValidKey = await validateAPIKey()
+      if (!isValidKey) {
+        return // Stop if API key is invalid
+      }
+
+      // Only show generating state after validation passes
       setGeneratingAudio(prev => new Set(prev).add(chapterId))
       
       const response = await fetch('/api/audio/generate', {

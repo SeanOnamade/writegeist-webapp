@@ -283,26 +283,59 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Audio generation error:', error)
       
+      // Determine error type and message
+      let errorMessage = 'Unknown error'
+      let statusCode = 500
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+        // Check for specific OpenAI API errors
+        if (error.message.includes('401') || error.message.includes('Incorrect API key')) {
+          errorMessage = 'Invalid OpenAI API key. Please check your API key configuration.'
+          statusCode = 401
+        } else if (error.message.includes('quota') || error.message.includes('billing')) {
+          errorMessage = 'OpenAI API quota exceeded. Please check your billing status.'
+          statusCode = 402
+        } else if (error.message.includes('rate limit')) {
+          errorMessage = 'Rate limit exceeded. Please try again in a few minutes.'
+          statusCode = 429
+        }
+      }
+      
       // Update audio record with error
       await supabase
         .from('chapter_audio')
         .update({
           status: 'error',
-          error_message: error instanceof Error ? error.message : 'Unknown error',
+          error_message: errorMessage,
           updated_at: new Date().toISOString()
         })
         .eq('id', audioId)
 
       return NextResponse.json(
-        { error: `Audio generation failed: ${error instanceof Error ? error.message : 'Unknown error'}` },
-        { status: 500 }
+        { 
+          error: errorMessage,
+          error_type: statusCode === 401 ? 'api_key_invalid' : 'generation_failed'
+        },
+        { status: statusCode }
       )
     }
 
   } catch (error) {
     console.error('Request processing error:', error)
+    
+    // Return more specific error for common issues
+    let errorMessage = 'Internal server error'
+    if (error instanceof Error) {
+      if (error.message.includes('API key') || error.message.includes('401')) {
+        errorMessage = 'Invalid OpenAI API key. Please check your configuration.'
+      } else if (error.message.includes('not authenticated')) {
+        errorMessage = 'User not authenticated'
+      }
+    }
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: errorMessage },
       { status: 500 }
     )
   }
@@ -404,9 +437,19 @@ async function generateAudioChunked(
         await new Promise(resolve => setTimeout(resolve, 500))
       }
       
-    } catch (error) {
-      console.error(`Error generating audio for chunk ${i+1}:`, error)
-      throw error
+    } catch (chunkError) {
+      console.error(`Error generating audio for chunk ${i+1}:`, chunkError)
+      
+      // Check if it's an API key error and throw with proper context
+      if (chunkError instanceof Error && (
+        chunkError.message.includes('401') || 
+        chunkError.message.includes('Incorrect API key') ||
+        chunkError.message.includes('invalid_api_key')
+      )) {
+        throw new Error('Invalid OpenAI API key. Please check your API key configuration.')
+      }
+      
+      throw new Error(`Failed to generate audio chunk ${i+1}: ${chunkError instanceof Error ? chunkError.message : 'Unknown error'}`)
     }
   }
   
