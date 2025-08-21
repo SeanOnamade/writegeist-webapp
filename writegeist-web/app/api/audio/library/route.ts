@@ -64,13 +64,26 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${audioData.length} audio records`)
 
-    // Combine chapters with their audio status
+    // Combine chapters with their audio status and outdated detection
     const chaptersWithAudio = chapters?.map(chapter => {
       const audio = audioData.find(a => a.chapter_id === chapter.id)
       
+      // Check if audio is outdated (compare content hashes)
+      let isOutdated = false
+      if (audio && audio.status === 'completed' && chapter.content) {
+        try {
+          // Create current content hash (same logic as generation)
+          const cleanedContent = cleanTextForTTS(chapter.content)
+          const currentHash = Buffer.from(cleanedContent).toString('base64').substring(0, 50)
+          isOutdated = audio.content_hash !== currentHash
+        } catch (error) {
+          console.warn('Error checking outdated status for chapter:', chapter.id)
+        }
+      }
+      
       return {
         ...chapter,
-        audio: audio || null,
+        audio: audio ? { ...audio, isOutdated } : null,
         project: chapter.projects,
         // Calculate content preview
         content_preview: chapter.content 
@@ -78,6 +91,25 @@ export async function GET(request: NextRequest) {
           : 'No content'
       }
     }) || []
+
+// Helper function for text cleaning (same as generation)
+function cleanTextForTTS(text: string): string {
+  let cleaned = text
+  
+  // Remove markdown formatting
+  cleaned = cleaned.replace(/#{1,6}\s*/g, '') // Headers
+  cleaned = cleaned.replace(/\*\*(.*?)\*\*/g, '$1') // Bold
+  cleaned = cleaned.replace(/\*(.*?)\*/g, '$1') // Italic
+  cleaned = cleaned.replace(/`(.*?)`/g, '$1') // Code
+  cleaned = cleaned.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
+  
+  // Clean up punctuation and spacing
+  cleaned = cleaned.replace(/\s+/g, ' ')
+  cleaned = cleaned.replace(/[^\w\s.,!?;:'"-]/g, '')
+  cleaned = cleaned.trim()
+  
+  return cleaned
+}
 
     // Group by project for better organization
     const projectGroups = chaptersWithAudio.reduce((groups, chapter) => {

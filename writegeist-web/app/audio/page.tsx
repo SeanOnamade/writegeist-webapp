@@ -19,6 +19,8 @@ interface AudioInfo {
   error_message?: string
   created_at: string
   updated_at: string
+  content_hash?: string
+  isOutdated?: boolean
 }
 
 interface ChapterWithAudio {
@@ -58,6 +60,31 @@ export default function AudioPage() {
   const [generationProgress, setGenerationProgress] = useState<Map<string, { progress: number, message: string }>>(new Map())
 // Removed unused playingAudio state
   const { toast } = useToast()
+
+  // Smart date formatting utility
+  const formatGenerationDate = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24))
+
+    if (diffInDays === 0) {
+      return 'Today'
+    } else if (diffInDays === 1) {
+      return 'Yesterday'
+    } else if (diffInDays < 7) {
+      return `${diffInDays} days ago`
+    } else if (diffInDays < 30) {
+      const weeks = Math.floor(diffInDays / 7)
+      return weeks === 1 ? '1 week ago' : `${weeks} weeks ago`
+    } else {
+      // For older dates, show the actual date
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    }
+  }
 
   // Load audio library
   const loadAudioLibrary = useCallback(async () => {
@@ -308,11 +335,12 @@ export default function AudioPage() {
     return `${mb.toFixed(1)} MB`
   }
 
-  // Get status badge
-  const getStatusBadge = (status: string, chapterId: string) => {
-    const isGenerating = generatingAudio.has(chapterId)
+  // Get status badge with outdated detection
+  const getStatusBadge = (chapter: ChapterWithAudio) => {
+    const isGenerating = generatingAudio.has(chapter.id)
+    const audio = chapter.audio
     
-    if (isGenerating || status === 'processing') {
+    if (isGenerating || audio?.status === 'processing') {
       return (
         <Badge variant="secondary" className="bg-blue-500/20 text-blue-400 border-blue-500/30">
           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
@@ -321,7 +349,23 @@ export default function AudioPage() {
       )
     }
 
-    switch (status) {
+    // Check for outdated content first
+    if (audio?.status === 'completed' && audio?.isOutdated) {
+      return (
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30">
+            <CheckCircle className="h-3 w-3 mr-1" />
+            Ready
+          </Badge>
+          <Badge variant="secondary" className="bg-orange-500/20 text-orange-400 border-orange-500/30" title="Chapter content has changed since audio generation">
+            <AlertCircle className="h-3 w-3 mr-1" />
+            Outdated
+          </Badge>
+        </div>
+      )
+    }
+
+    switch (audio?.status) {
       case 'completed':
         return (
           <Badge variant="secondary" className="bg-green-500/20 text-green-400 border-green-500/30">
@@ -451,7 +495,7 @@ export default function AudioPage() {
                       </p>
                     </div>
                     <div className="ml-4">
-                      {getStatusBadge(chapter.audio?.status || 'pending', chapter.id)}
+                      {getStatusBadge(chapter)}
                     </div>
                   </div>
                 </CardHeader>
@@ -460,10 +504,13 @@ export default function AudioPage() {
                   {chapter.audio?.status === 'completed' ? (
                     <div className="space-y-4">
                       {/* Audio Info */}
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
                         <span>Duration: {formatDuration(chapter.audio.duration || 0)}</span>
                         <span>Size: {formatFileSize(chapter.audio.file_size || 0)}</span>
                         <span>Voice: {chapter.audio.voice_model}</span>
+                        {chapter.audio.created_at && (
+                          <span>Generated: {formatGenerationDate(chapter.audio.created_at)}</span>
+                        )}
                       </div>
                       
                       {/* Audio Player */}
