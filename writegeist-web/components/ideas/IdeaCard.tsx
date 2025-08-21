@@ -169,7 +169,7 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
           <div className="flex items-start justify-between mb-3">
             <div className="flex-1 min-w-0">
               <h3 
-                className="font-semibold text-lg mb-2 cursor-pointer hover:text-primary transition-colors break-words sm:truncate"
+                className="font-semibold text-lg mb-2 cursor-pointer hover:text-primary transition-colors line-clamp-2"
                 onClick={() => onView?.(idea)}
                 title={idea.title}
               >
