@@ -1,10 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
+import { getApiKey } from '@/lib/crypto'
 import OpenAI from 'openai'
 
 export async function POST(request: NextRequest) {
   try {
-    // Get API key from environment or request
-    let apiKey = process.env.OPENAI_API_KEY
+    const body = await request.json().catch(() => ({}))
+    let apiKey = body.apiKey // Test specific key if provided
+    
+    // If no specific key provided, get from user settings or environment
+    if (!apiKey) {
+      apiKey = process.env.OPENAI_API_KEY
+      
+      // Try to get user-specific API key from settings
+      try {
+        const supabase = await createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        
+        if (user) {
+          // Get user preferences where settings are actually stored
+          const { data: userData } = await supabase
+            .from('users')
+            .select('preferences')
+            .eq('id', user.id)
+            .single()
+          
+          if (userData?.preferences?.openaiApiKey) {
+            // Decrypt the stored API key
+            apiKey = getApiKey(userData.preferences.openaiApiKey)
+            console.log('✅ Using OpenAI API key from user settings (decrypted)')
+          } else {
+            console.log('No user API key found, using environment API key')
+          }
+        }
+      } catch (userSettingsError) {
+        console.log('Error loading user settings, using environment API key:', userSettingsError)
+      }
+    } else {
+      console.log('Testing provided API key directly')
+    }
 
     if (!apiKey || apiKey.trim().length === 0) {
       return NextResponse.json(
@@ -17,11 +51,18 @@ export async function POST(request: NextRequest) {
     }
 
     // Basic format validation first (quick)
+    // console.log('API key format check:', {
+    //   startsWithSk: apiKey.startsWith('sk-'),
+    //   length: apiKey.length,
+    //   firstChars: apiKey.substring(0, 8),
+    //   lastChars: apiKey.substring(apiKey.length - 4)
+    // })
+    
     if (!apiKey.startsWith('sk-') || apiKey.length < 20) {
       return NextResponse.json(
         { 
           valid: false, 
-          error: 'Invalid API key format. OpenAI keys should start with "sk-".' 
+          error: `Invalid API key format. Expected format: sk-*** (got length: ${apiKey.length})` 
         },
         { status: 400 }
       )

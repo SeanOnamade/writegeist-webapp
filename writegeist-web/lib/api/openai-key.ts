@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { getApiKey } from '@/lib/crypto'
 
 interface ApiKeyResult {
   apiKey: string | null
@@ -21,16 +22,16 @@ export async function getOpenAIApiKey(): Promise<ApiKeyResult> {
     if (!userError && user) {
       // Try to get API key from user settings first
       try {
-        const { data: settings } = await supabase
-          .from('user_settings')
-          .select('settings')
-          .eq('user_id', user.id)
+        const { data: userData } = await supabase
+          .from('users')
+          .select('preferences')
+          .eq('id', user.id)
           .single()
         
-        if (settings?.settings?.openai_api_key) {
-          console.log('Using OpenAI API key from user settings')
+        if (userData?.preferences?.openaiApiKey) {
+          console.log('✅ Using OpenAI API key from user settings')
           return {
-            apiKey: settings.settings.openai_api_key,
+            apiKey: getApiKey(userData.preferences.openaiApiKey),
             source: 'user_settings'
           }
         }

@@ -54,6 +54,8 @@ export default function AudioPage() {
   const [generatingAudio, setGeneratingAudio] = useState<Set<string>>(new Set())
   const [readAlongModal, setReadAlongModal] = useState<{ isOpen: boolean, chapter: ChapterWithAudio | null }>({ isOpen: false, chapter: null })
   const [apiKeyValidated, setApiKeyValidated] = useState<boolean | null>(null) // Cache validation result
+  const [validatingKey, setValidatingKey] = useState<Set<string>>(new Set()) // Track validation in progress
+  const [generationProgress, setGenerationProgress] = useState<Map<string, { progress: number, message: string }>>(new Map())
 // Removed unused playingAudio state
   const { toast } = useToast()
 
@@ -89,14 +91,17 @@ export default function AudioPage() {
     loadAudioLibrary()
   }, [loadAudioLibrary])
 
-  // Validate API key before generation (with caching)
-  const validateAPIKey = async (): Promise<boolean> => {
-    // Use cached result if available (valid for 5 minutes)
-    if (apiKeyValidated !== null) {
-      return apiKeyValidated
-    }
-
+  // Validate API key before generation (with smart caching)
+  const validateAPIKey = async (chapterId: string): Promise<boolean> => {
     try {
+      // Only use cached result for successful validations
+      if (apiKeyValidated === true) {
+        return true
+      }
+
+      // Show validation loading state
+      setValidatingKey(prev => new Set(prev).add(chapterId))
+
       const response = await fetch('/api/audio/validate-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
@@ -105,7 +110,7 @@ export default function AudioPage() {
       const result = await response.json()
       
       if (!result.valid) {
-        setApiKeyValidated(false)
+        // Don't cache failures - always show toast for API key issues
         toast({
           title: "⚠️ OpenAI API Key Issue",
           description: result.error || "Please check your OpenAI API key configuration.",
@@ -121,29 +126,37 @@ export default function AudioPage() {
       return true
     } catch (error) {
       console.error('API key validation error:', error)
-      setApiKeyValidated(false)
       toast({
         title: "⚠️ Cannot Validate API Key",
         description: "Unable to verify your OpenAI API key. Generation may fail.",
         variant: "destructive",
       })
       return false
+    } finally {
+      // Clear validation loading state
+      setValidatingKey(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(chapterId)
+        return newSet
+      })
     }
   }
 
-  // Generate audio for a chapter
+  // Generate audio for a chapter with real-time progress
   const generateAudio = async (chapterId: string, chapterTitle: string, force: boolean = false) => {
     try {
       // Validate API key first (before showing generating state)
-      const isValidKey = await validateAPIKey()
+      const isValidKey = await validateAPIKey(chapterId)
       if (!isValidKey) {
         return // Stop if API key is invalid
       }
 
       // Only show generating state after validation passes
       setGeneratingAudio(prev => new Set(prev).add(chapterId))
+      setGenerationProgress(prev => new Map(prev).set(chapterId, { progress: 0, message: 'Preparing...' }))
       
-      const response = await fetch('/api/audio/generate', {
+      // Use Server-Sent Events for real-time progress
+      const response = await fetch('/api/audio/generate-stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -158,16 +171,59 @@ export default function AudioPage() {
         const errorData = await response.json()
         throw new Error(errorData.error || `Generation failed: ${response.status}`)
       }
-      
-      const result = await response.json()
-      
-      toast({
-        title: "Audio Generated!",
-        description: `Audio for "${chapterTitle}" is ready to play.`,
-      })
-      
-      // Refresh the library to show updated status
-      await loadAudioLibrary()
+
+      // Set up SSE listener for real-time progress
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
+
+            const chunk = decoder.decode(value)
+            const lines = chunk.split('\n')
+
+            let currentEvent = ''
+            
+            for (const line of lines) {
+              if (line.startsWith('event: ')) {
+                currentEvent = line.slice(7).trim()
+              } else if (line.startsWith('data: ') && currentEvent) {
+                try {
+                  const data = JSON.parse(line.slice(6))
+                  // console.log(`SSE Event: ${currentEvent}`, data) // Debug
+                  
+                  if (currentEvent === 'progress') {
+                    // Update progress
+                    setGenerationProgress(prev => new Map(prev).set(chapterId, {
+                      progress: data.progress || 0,
+                      message: data.message || 'Processing...'
+                    }))
+                  } else if (currentEvent === 'complete') {
+                    // Generation completed
+                    toast({
+                      title: "Audio Generated!",
+                      description: `Audio for "${chapterTitle}" is ready to play.`,
+                    })
+                    
+                    // Refresh library to show new audio
+                    await loadAudioLibrary()
+                    break
+                  } else if (currentEvent === 'error') {
+                    throw new Error(data.error || 'Generation failed')
+                  }
+                } catch (parseError) {
+                  console.warn('Error parsing SSE data:', parseError)
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock()
+        }
+      }
       
     } catch (error) {
       console.error('Audio generation error:', error)
@@ -181,6 +237,11 @@ export default function AudioPage() {
         const newSet = new Set(prev)
         newSet.delete(chapterId)
         return newSet
+      })
+      setGenerationProgress(prev => {
+        const newMap = new Map(prev)
+        newMap.delete(chapterId)
+        return newMap
       })
     }
   }
@@ -441,11 +502,25 @@ export default function AudioPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => generateAudio(chapter.id, chapter.title, true)}
-                          disabled={generatingAudio.has(chapter.id)}
+                          disabled={generatingAudio.has(chapter.id) || validatingKey.has(chapter.id)}
                           className="gap-2 w-full md:flex-1 md:w-auto min-w-0 relative z-10 hover:z-20"
                         >
-                          <RefreshCw className="h-4 w-4" />
-                          Regenerate
+                          {validatingKey.has(chapter.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Validating...
+                            </>
+                          ) : generatingAudio.has(chapter.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Regenerating...
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-4 w-4" />
+                              Regenerate
+                            </>
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -458,11 +533,25 @@ export default function AudioPage() {
                       </div>
                       <Button
                         onClick={() => generateAudio(chapter.id, chapter.title, true)}
-                        disabled={generatingAudio.has(chapter.id)}
+                        disabled={generatingAudio.has(chapter.id) || validatingKey.has(chapter.id)}
                         className="gap-2"
                       >
-                        <RefreshCw className="h-4 w-4" />
-                        Try Again
+                        {validatingKey.has(chapter.id) ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Validating...
+                          </>
+                        ) : generatingAudio.has(chapter.id) ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Trying Again...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-4 w-4" />
+                            Try Again
+                          </>
+                        )}
                       </Button>
                     </div>
                   ) : chapter.audio?.status === 'processing' || generatingAudio.has(chapter.id) ? (
@@ -470,13 +559,21 @@ export default function AudioPage() {
                       <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-2">
                           <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
-                          <span className="text-sm text-blue-400">Generating audio...</span>
+                          <span className="text-sm text-blue-400">
+                            {generationProgress.get(chapter.id)?.message || 'Generating audio...'}
+                          </span>
                         </div>
                         <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+                          <div 
+                            className="h-full bg-blue-500 rounded-full transition-all duration-500 ease-out" 
+                            style={{ width: `${generationProgress.get(chapter.id)?.progress || 0}%` }}
+                          ></div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2">
-                          This may take a few minutes depending on chapter length
+                          {generationProgress.get(chapter.id)?.progress ? 
+                            `${generationProgress.get(chapter.id)?.progress}% complete` :
+                            'This may take a few minutes depending on chapter length'
+                          }
                         </p>
                       </div>
                     </div>
@@ -485,14 +582,28 @@ export default function AudioPage() {
                       <p className="text-sm text-muted-foreground">
                         Generate high-quality audio narration for this chapter using AI text-to-speech.
                       </p>
-                      <Button
-                        onClick={() => generateAudio(chapter.id, chapter.title)}
-                        disabled={generatingAudio.has(chapter.id)}
-                        className="gap-2"
-                      >
-                        <Headphones className="h-4 w-4" />
-                        Generate Audio
-                      </Button>
+                                              <Button
+                          onClick={() => generateAudio(chapter.id, chapter.title)}
+                          disabled={generatingAudio.has(chapter.id) || validatingKey.has(chapter.id)}
+                          className="gap-2"
+                        >
+                          {validatingKey.has(chapter.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Validating...
+                            </>
+                          ) : generatingAudio.has(chapter.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Headphones className="h-4 w-4" />
+                              Generate Audio
+                            </>
+                          )}
+                        </Button>
                     </div>
                   )}
                 </CardContent>

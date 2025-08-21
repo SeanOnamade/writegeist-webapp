@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api/client'
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { encryptData, getApiKey } from '@/lib/crypto'
 
 interface AppSettings {
   theme: 'light' | 'dark' | 'system'
@@ -32,6 +35,9 @@ export function AppSettings() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
+  const [validatingApiKey, setValidatingApiKey] = useState(false)
+  const [apiKeyStatus, setApiKeyStatus] = useState<'valid' | 'invalid' | null>(null)
+  const { toast } = useToast()
 
   useEffect(() => {
     loadSettings()
@@ -41,7 +47,19 @@ export function AppSettings() {
     try {
       const result = await api.getSettings()
       if (result.success && result.data) {
-        setSettings({ ...defaultSettings, ...result.data })
+        const loadedSettings = { ...defaultSettings, ...result.data }
+        
+        // Decrypt API key if it exists
+        if (loadedSettings.openaiApiKey) {
+          try {
+            loadedSettings.openaiApiKey = getApiKey(loadedSettings.openaiApiKey as string)
+          } catch (error) {
+            console.error('Error decrypting API key:', error)
+            loadedSettings.openaiApiKey = '' // Clear invalid key
+          }
+        }
+        
+        setSettings(loadedSettings)
       }
     } catch (error) {
       console.error('Error loading settings:', error)
@@ -55,9 +73,16 @@ export function AppSettings() {
     setMessage('')
 
     try {
-      const result = await api.saveSettings(settings as unknown as Record<string, unknown>)
+      // Encrypt API key before saving
+      const settingsToSave = { ...settings }
+      if (settingsToSave.openaiApiKey && settingsToSave.openaiApiKey.trim()) {
+        settingsToSave.openaiApiKey = encryptData(settingsToSave.openaiApiKey.trim())
+      }
+
+      const result = await api.saveSettings(settingsToSave as unknown as Record<string, unknown>)
       if (result.success) {
-        setMessage('Settings saved successfully!')
+        setMessage('Settings saved successfully! (API key encrypted)')
+        setApiKeyStatus(null) // Reset validation status after save
       } else {
         setMessage('Failed to save settings: ' + (result.error || 'Unknown error'))
       }
@@ -70,6 +95,62 @@ export function AppSettings() {
 
   const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
+    // Reset API key status when key changes
+    if (key === 'openaiApiKey') {
+      setApiKeyStatus(null)
+    }
+  }
+
+  const validateApiKey = async () => {
+    const keyToTest = settings.openaiApiKey?.trim()
+    
+    if (!keyToTest || keyToTest.length === 0) {
+      toast({
+        title: "⚠️ No API Key",
+        description: "Please enter an OpenAI API key first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setValidatingApiKey(true)
+    setApiKeyStatus(null)
+
+    try {
+      // Test the current input value, not the saved one
+      const response = await fetch('/api/audio/validate-key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: keyToTest })
+      })
+
+      const result = await response.json()
+      
+      if (result.valid) {
+        setApiKeyStatus('valid')
+        toast({
+          title: "✅ API Key Valid",
+          description: result.message || "Your OpenAI API key is working correctly!",
+        })
+      } else {
+        setApiKeyStatus('invalid')
+        toast({
+          title: "❌ API Key Invalid",
+          description: result.error || "Please check your OpenAI API key.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('API key validation error:', error)
+      setApiKeyStatus('invalid')
+      toast({
+        title: "⚠️ Validation Failed",
+        description: "Unable to validate API key. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setValidatingApiKey(false)
+    }
   }
 
   if (loading) {
@@ -120,15 +201,44 @@ export function AppSettings() {
             <label htmlFor="openaiApiKey" className="block text-sm font-medium mb-2">
               OpenAI API Key
             </label>
-            <Input
-              id="openaiApiKey"
-              type="password"
-              value={settings.openaiApiKey}
-              onChange={(e) => updateSetting('openaiApiKey', e.target.value)}
-              placeholder="sk-..."
-            />
+            <div className="flex gap-2">
+              <Input
+                id="openaiApiKey"
+                type="password"
+                value={settings.openaiApiKey}
+                onChange={(e) => updateSetting('openaiApiKey', e.target.value)}
+                placeholder="sk-..."
+                className="flex-1"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={validateApiKey}
+                disabled={validatingApiKey || !settings.openaiApiKey?.trim()}
+                className="flex items-center gap-2 px-3"
+              >
+                {validatingApiKey ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Validating...
+                  </>
+                ) : apiKeyStatus === 'valid' ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    Valid
+                  </>
+                ) : apiKeyStatus === 'invalid' ? (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    Invalid
+                  </>
+                ) : (
+                  'Validate'
+                )}
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Required for AI-powered features like chapter analysis and chat.
+              Required for AI-powered features like chapter analysis, chat, and audio generation.
             </p>
           </div>
         </div>

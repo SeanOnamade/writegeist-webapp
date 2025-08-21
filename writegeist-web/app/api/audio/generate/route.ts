@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { getApiKey } from '@/lib/crypto'
 import OpenAI from 'openai'
 import { parseBuffer } from 'music-metadata'
 
@@ -22,20 +23,21 @@ export async function POST(request: NextRequest) {
     let apiKey = process.env.OPENAI_API_KEY
     
     try {
-      const { data: settings } = await supabase
-        .from('user_settings')
-        .select('settings')
-        .eq('user_id', user.id)
+      const { data: userData } = await supabase
+        .from('users')
+        .select('preferences')
+        .eq('id', user.id)
         .single()
       
-      if (settings?.settings?.openai_api_key) {
-        apiKey = settings.settings.openai_api_key
-        console.log('Using OpenAI API key from user settings')
+      if (userData?.preferences?.openaiApiKey) {
+        // Decrypt the stored API key
+        apiKey = getApiKey(userData.preferences.openaiApiKey)
+        console.log('✅ Using OpenAI API key from user settings (decrypted)')
       } else {
-        console.log('Using OpenAI API key from environment variables')
+        console.log('No user API key found, using environment variables')
       }
     } catch (error) {
-      console.log('Could not load user settings, using env API key')
+      console.log('Could not load user settings, using env API key:', error)
     }
     
     if (!apiKey) {
