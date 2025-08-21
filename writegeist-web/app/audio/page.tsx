@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Headphones, Download, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, BookOpen } from 'lucide-react'
+import { Headphones, Download, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, BookOpen, Book } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 // Progress component replaced with simple div for compatibility
 import { useToast } from '@/hooks/use-toast'
+import { ReadAlongModal } from '@/components/audio/ReadAlongModal'
 
 interface AudioInfo {
   id: string
@@ -51,6 +52,7 @@ export default function AudioPage() {
   const [stats, setStats] = useState<AudioStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [generatingAudio, setGeneratingAudio] = useState<Set<string>>(new Set())
+  const [readAlongModal, setReadAlongModal] = useState<{ isOpen: boolean, chapter: ChapterWithAudio | null }>({ isOpen: false, chapter: null })
 // Removed unused playingAudio state
   const { toast } = useToast()
 
@@ -366,12 +368,21 @@ export default function AudioPage() {
                       </div>
                       
                       {/* Actions */}
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setReadAlongModal({ isOpen: true, chapter })}
+                          className="gap-2 flex-1 md:flex-[2] min-w-0 relative z-10 hover:z-20"
+                        >
+                          <Book className="h-4 w-4" />
+                          Read Along
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => downloadAudio(chapter)}
-                          className="gap-2"
+                          className="gap-2 flex-1 md:flex-1 min-w-0 relative z-10 hover:z-20"
                         >
                           <Download className="h-4 w-4" />
                           Download
@@ -381,7 +392,7 @@ export default function AudioPage() {
                           size="sm"
                           onClick={() => generateAudio(chapter.id, chapter.title, true)}
                           disabled={generatingAudio.has(chapter.id)}
-                          className="gap-2"
+                          className="gap-2 w-full md:flex-1 md:w-auto min-w-0 relative z-10 hover:z-20"
                         >
                           <RefreshCw className="h-4 w-4" />
                           Regenerate
@@ -440,6 +451,15 @@ export default function AudioPage() {
           </div>
         )}
       </div>
+      
+      {/* Read Along Modal */}
+      {readAlongModal.chapter && (
+        <ReadAlongModal
+          isOpen={readAlongModal.isOpen}
+          onClose={() => setReadAlongModal({ isOpen: false, chapter: null })}
+          chapter={readAlongModal.chapter}
+        />
+      )}
     </div>
   )
 }
