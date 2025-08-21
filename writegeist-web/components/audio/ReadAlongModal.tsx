@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { X, BookOpen, Clock, FileText, Volume2 } from 'lucide-react'
+import Link from 'next/link'
+import { X, BookOpen, Clock, FileText, Volume2, Book } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
@@ -139,6 +140,14 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
                 )}
                 {chapter.audio && chapter.audio.voice_model && (
                   <span className="text-primary">Voice: {chapter.audio.voice_model}</span>
+                )}
+                {chapter.project_id && (
+                  <Link href={`/project/${chapter.project_id}/read?chapter=${chapter.id}`}>
+                    <Button variant="outline" size="sm" className="flex items-center gap-2 text-xs font-medium border-2">
+                      <Book className="h-3 w-3" />
+                      Read in Full
+                    </Button>
+                  </Link>
                 )}
               </div>
             </div>

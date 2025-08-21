@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, Menu, X, ArrowLeft, Clock, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Menu, X, ArrowLeft, Clock, FileText, Edit } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
 import type { Project, Chapter } from '@/types/database'
@@ -13,7 +13,9 @@ import { chaptersAPI } from '@/lib/api/chapters'
 
 export default function BookReaderPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const projectId = Array.isArray(params.id) ? params.id[0] : params.id || ''
+  const targetChapterId = searchParams.get('chapter')
 
   const [project, setProject] = useState<Project | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -89,9 +91,19 @@ export default function BookReaderPage() {
       
       setChapters(sortedChapters)
       
-      // Reset chapter index if it's out of bounds
-      if (sortedChapters.length > 0 && currentChapterIndex >= sortedChapters.length) {
-        setCurrentChapterIndex(0)
+      // Reset chapter index if it's out of bounds or find target chapter
+      if (sortedChapters.length > 0) {
+        if (targetChapterId) {
+          // Find the target chapter index
+          const targetIndex = sortedChapters.findIndex(ch => ch.id === targetChapterId)
+          if (targetIndex >= 0) {
+            setCurrentChapterIndex(targetIndex)
+          } else {
+            setCurrentChapterIndex(0)
+          }
+        } else if (currentChapterIndex >= sortedChapters.length) {
+          setCurrentChapterIndex(0)
+        }
       }
     } catch (error) {
       console.error('Error loading project and chapters:', error)
@@ -232,6 +244,19 @@ export default function BookReaderPage() {
 
             {/* Right: Navigation and TOC */}
             <div className="flex items-center gap-2">
+              {currentChapter && (
+                <Link href={`/chapters/${currentChapter.id}`}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="flex items-center gap-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                    <span className="hidden sm:inline">Edit</span>
+                  </Button>
+                </Link>
+              )}
+              
               <Button
                 variant="outline"
                 size="sm"
