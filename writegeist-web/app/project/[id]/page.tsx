@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BookOpen, Edit } from 'lucide-react'
 import type { Project, Chapter } from '@/types/database'
 import { projectsAPI } from '@/lib/api/projects'
 import { chaptersAPI } from '@/lib/api/chapters'
@@ -186,10 +187,30 @@ export default function ProjectDetailPage() {
               
               <div className="flex flex-col sm:flex-row gap-2 sm:gap-2 sm:flex-shrink-0">
                 <Button variant="outline" onClick={() => setIsEditing(true)} size="sm" className="sm:size-default">
+                  <Edit className="h-4 w-4 mr-2" />
                   Edit Project
                 </Button>
+                {project.chapter_count > 0 ? (
+                  <Link href={`/project/${project.id}/read`}>
+                    <Button variant="outline" size="sm" className="w-full sm:w-auto sm:size-default">
+                      <BookOpen className="h-4 w-4 mr-2" />
+                      Read Book
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled 
+                    className="w-full sm:w-auto sm:size-default opacity-50 cursor-not-allowed"
+                    title="Add chapters to enable reading"
+                  >
+                    <BookOpen className="h-4 w-4 mr-2" />
+                    Read Book
+                  </Button>
+                )}
                 <Link href={`/chapters?project=${project.id}`}>
-                  <Button size="sm" className="w-full sm:w-auto sm:size-default">
+                  <Button variant="outline" size="sm" className="w-full sm:w-auto sm:size-default">
                     Manage Chapters
                   </Button>
                 </Link>

@@ -47,29 +47,37 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
 
   // Fetch full chapter content when modal opens
   useEffect(() => {
-    if (isOpen && chapter.id) {
+    if (isOpen && chapter?.id) {
       loadChapterContent()
     }
-  }, [isOpen, chapter.id])
+  }, [isOpen, chapter?.id])
 
   const loadChapterContent = async () => {
     try {
       setLoading(true)
       setError(null)
 
+      if (!chapter?.id) {
+        throw new Error('Invalid chapter ID')
+      }
+
       // Try to get full content from the chapters API
       const response = await fetch(`/api/chapters/${chapter.id}`)
       if (!response.ok) {
-        throw new Error('Failed to load chapter content')
+        throw new Error(`Failed to load chapter content: ${response.status}`)
       }
 
       const chapterData = await response.json()
-      setFullContent(chapterData.content || chapter.content)
+      if (chapterData && typeof chapterData === 'object') {
+        setFullContent(chapterData.content || chapter.content || '')
+      } else {
+        throw new Error('Invalid chapter data format')
+      }
     } catch (err) {
       console.error('Error loading chapter content:', err)
       setError('Failed to load chapter content')
       // Fallback to the content we already have
-      setFullContent(chapter.content)
+      setFullContent(chapter?.content || '')
     } finally {
       setLoading(false)
     }
@@ -146,7 +154,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
         </div>
 
         {/* Audio Player */}
-        {chapter.audio && chapter.audio.status === 'completed' && (
+        {chapter.audio && chapter.audio.status === 'completed' && chapter.audio.id && (
           <div className="p-4 md:p-6 border-b border-border bg-muted/10">
             <div className="max-w-4xl mx-auto">
               <audio 

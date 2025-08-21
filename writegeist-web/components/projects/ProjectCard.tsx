@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { BookOpen } from 'lucide-react'
 import type { Project } from '@/types/database'
 import { projectsAPI } from '@/lib/api/projects'
 
@@ -164,7 +165,26 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
           </div>
 
           <div className="mt-4 pt-4 border-t">
-            <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+              {project.chapter_count > 0 ? (
+                <Link href={`/project/${project.id}/read`}>
+                  <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <BookOpen className="h-4 w-4" />
+                    Read Book
+                  </Button>
+                </Link>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled 
+                  className="flex items-center gap-2 opacity-50 cursor-not-allowed"
+                  title="Add chapters to enable reading"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Read Book
+                </Button>
+              )}
               <Link href={`/project/${project.id}`}>
                 <Button size="sm">
                   Open Project
