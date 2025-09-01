@@ -134,6 +134,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ results: [] })
     }
 
+    // If vector search returns no results, try comprehensive fallback
+    if (!results || results.length === 0) {
+      console.log('Vector search failed - trying comprehensive fallback')
+      
+      // Try multiple search strategies
+      let fallbackResults = []
+      
+      // Strategy 1: Search for key terms in the query
+      const keyTerms = query.toLowerCase()
+        .replace(/^(who is|what is|tell me about|describe|what happens|how does|where is|when does)\s+/i, '')
+        .trim()
+        .split(/\s+/)
+        .filter((term: string) => term.length > 2) // Only meaningful terms
+      
+      console.log(`Key terms to search:`, keyTerms)
+      
+                    // Search for each key term
+       for (const term of keyTerms) {
+         const { data: termResults, error: termError } = await supabase
+          .from('document_embeddings')
+          .select('id, content_text, chapter_id, project_id, content_type, metadata')
+          .eq('project_id', projectId)
+          .ilike('content_text', `%${term}%`)
+          .limit(limit / keyTerms.length) // Distribute limit across terms
+        
+        if (termResults && termResults.length > 0) {
+          console.log(`Found ${termResults.length} results for term "${term}"`)
+          fallbackResults.push(...termResults)
+        }
+      }
+      
+      // Remove duplicates and sort by relevance
+      const uniqueResults = fallbackResults.filter((result, index, self) => 
+        index === self.findIndex(r => r.id === result.id)
+      )
+      
+      if (uniqueResults.length > 0) {
+        console.log(`Total unique fallback results: ${uniqueResults.length}`)
+        
+        // Convert to vector search format with similarity scores
+        const formattedResults = uniqueResults.slice(0, limit).map((result: any, index: number) => ({
+          ...result,
+          similarity: 0.8 - (index * 0.05), // Good similarity for fallback matches
+          content_text: result.content_text
+        }))
+
+        return NextResponse.json({
+          results: formattedResults,
+          query: query,
+          total_found: uniqueResults.length,
+          source: 'comprehensive_fallback'
+        })
+      }
+    }
+
     // Process and combine chunk results
     const processedResults = results || []
     

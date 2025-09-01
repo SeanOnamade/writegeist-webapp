@@ -277,7 +277,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
     
     setRegeneratingEmbeddings(true)
     try {
-      const response = await fetch('/api/embeddings/regenerate-project', {
+              const response = await fetch('/api/embeddings/regenerate-project-fixed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: selectedProjectId })
@@ -289,7 +289,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
         
         // Show success message
         const projectName = projects.find(p => p.id === selectedProjectId)?.title || 'Project'
-        alert(`✅ Successfully regenerated embeddings for ${projectName}!\n\nGenerated ${result.successfulEmbeddings}/${result.totalChapters} embeddings.\n\nChat should now work properly with vector search.`)
+        alert(`✅ Successfully regenerated embeddings for ${projectName}!\n\nGenerated ${result.totalChunks} chunked embeddings from ${result.chaptersWithContent} chapters with content (out of ${result.totalChapters} total chapters).\n\nChat should now provide much more specific and accurate answers!`)
       } else {
         console.error('Failed to regenerate embeddings')
         alert('❌ Failed to regenerate embeddings. Please check the console for details.')

@@ -6,7 +6,7 @@ import { contentChunker } from '@/lib/embeddings/chunking'
 export async function POST(request: NextRequest) {
   try {
     const { projectId } = await request.json()
-    
+
     const { apiKey } = await getOpenAIApiKey()
     if (!apiKey) {
       return NextResponse.json(
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
-    
+
     // Get the current user
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     if (userError || !user) {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Get all chapters for the project
     const { data: chapters, error: chaptersError } = await supabase
       .from('chapters')
-      .select('id, title, content, project_id, content_file_path, order_index')
+      .select('id, title, content, project_id, order_index, content_file_path')
       .eq('project_id', projectId)
       .order('order_index', { ascending: true })
 
@@ -50,8 +50,9 @@ export async function POST(request: NextRequest) {
     console.log('Chapter details:')
     chapters.forEach((chapter, index) => {
       console.log(`  ${index + 1}. Chapter ${chapter.order_index}: ${chapter.title} (${chapter.id})`)
-      console.log(`     Content length: ${chapter.content?.length || 0}`)
+      console.log(`     Database content length: ${chapter.content?.length || 0}`)
       console.log(`     Has storage path: ${!!chapter.content_file_path}`)
+      console.log(`     Storage path: ${chapter.content_file_path}`)
     })
 
     // Delete existing embeddings for this project
@@ -69,26 +70,28 @@ export async function POST(request: NextRequest) {
     // Generate chunked embeddings for each chapter
     const results = []
     let totalChunks = 0
-    
+    let chaptersWithContent = 0
+
     for (const chapter of chapters) {
       try {
-        console.log(`Processing chapter: ${chapter.title} (${chapter.id})`)
-        
         let content = chapter.content
-        
+
         // If content is not in database, try to load from storage
         if (!content && chapter.content_file_path) {
           try {
-            const { data: storageData } = await supabase.storage
+            console.log(`Loading content from storage for chapter ${chapter.order_index}: ${chapter.title}`)
+            const { data: storageData, error: downloadError } = await supabase.storage
               .from('chapter-content')
               .download(chapter.content_file_path)
-            
-            if (storageData) {
+
+            if (downloadError) {
+              console.error(`Storage download error for chapter ${chapter.title}:`, downloadError)
+            } else if (storageData) {
               content = await storageData.text()
-              console.log(`Loaded content from storage: ${content.length} characters`)
+              console.log(`✅ Loaded content from storage: ${content.length} characters`)
             }
           } catch (storageError) {
-            console.error('Error loading from storage:', storageError)
+            console.error(`Error loading from storage for chapter ${chapter.title}:`, storageError)
           }
         }
 
@@ -97,6 +100,7 @@ export async function POST(request: NextRequest) {
           continue
         }
 
+        chaptersWithContent++
         console.log(`Processing chapter ${chapter.order_index}: ${chapter.title} (${content.length} chars)`)
 
         // Chunk the content intelligently
@@ -111,10 +115,10 @@ export async function POST(request: NextRequest) {
         // Generate embeddings for each chunk
         for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
           const chunk = chunks[chunkIndex]
-          
+
           try {
             console.log(`Generating embedding for chunk ${chunkIndex + 1}/${chunks.length} (${chunk.text.length} chars)`)
-            
+
             const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
               method: 'POST',
               headers: {
@@ -156,7 +160,7 @@ export async function POST(request: NextRequest) {
                   chunk_start: chunk.startChar,
                   chunk_end: chunk.endChar,
                   total_chunks: chunks.length,
-                  source: 'regenerate_project_chunked'
+                  source: 'regenerate_project_hybrid'
                 }
               })
               .select()
@@ -168,7 +172,7 @@ export async function POST(request: NextRequest) {
 
             console.log(`Successfully generated embedding for chunk ${chunkIndex + 1}/${chunks.length} of chapter: ${chapter.title}`)
             totalChunks++
-            
+
             results.push({
               chapterId: chapter.id,
               chapterTitle: chapter.title,
@@ -188,11 +192,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`Successfully generated ${totalChunks} chunked embeddings from ${chapters.length} chapters`)
+    console.log(`Successfully generated ${totalChunks} chunked embeddings from ${chaptersWithContent} chapters with content`)
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
       totalChapters: chapters.length,
+      chaptersWithContent: chaptersWithContent,
       totalChunks: totalChunks,
       successfulEmbeddings: results.length,
       results: results
