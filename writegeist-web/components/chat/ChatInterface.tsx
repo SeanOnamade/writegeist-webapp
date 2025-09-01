@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import type { ChatSession, ChatMessage, Project } from '@/types/database'
 import { chatAPI } from '@/lib/api/chat'
 import { projectsAPI } from '@/lib/api/projects'
+import { Pencil } from 'lucide-react'
 
 interface ChatInterfaceProps {
   sessionId?: string
@@ -23,10 +24,13 @@ export function ChatInterface({ sessionId, projectId, onSessionCreated }: ChatIn
   const [thinking, setThinking] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [regeneratingEmbeddings, setRegeneratingEmbeddings] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     loadProjects()
+    getCurrentUser()
     if (sessionId) {
       loadSession()
     } else if (projectId) {
@@ -37,6 +41,19 @@ export function ChatInterface({ sessionId, projectId, onSessionCreated }: ChatIn
   useEffect(() => {
     scrollToBottom()
   }, [messages])
+
+  const getCurrentUser = async () => {
+    try {
+      const { createClient } = await import('@/lib/supabase/client')
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        setCurrentUserId(user.id)
+      }
+    } catch (error) {
+      console.error('Error getting current user:', error)
+    }
+  }
 
   const loadProjects = async () => {
     try {
@@ -173,7 +190,7 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
           temperature: 0.7,
           max_tokens: 500,
           projectId: session.project_id,
-          userId: session.user_id || 'temp-user' // Use real user ID from session
+          userId: currentUserId || session.user_id || 'temp-user' // Use current authenticated user ID
         })
       })
 
@@ -255,6 +272,36 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
     return project?.title || 'Unknown Project'
   }
 
+  const regenerateEmbeddings = async () => {
+    if (!selectedProjectId) return
+    
+    setRegeneratingEmbeddings(true)
+    try {
+      const response = await fetch('/api/embeddings/regenerate-project', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: selectedProjectId })
+      })
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('Embeddings regenerated successfully:', result)
+        
+        // Show success message
+        const projectName = projects.find(p => p.id === selectedProjectId)?.title || 'Project'
+        alert(`✅ Successfully regenerated embeddings for ${projectName}!\n\nGenerated ${result.successfulEmbeddings}/${result.totalChapters} embeddings.\n\nChat should now work properly with vector search.`)
+      } else {
+        console.error('Failed to regenerate embeddings')
+        alert('❌ Failed to regenerate embeddings. Please check the console for details.')
+      }
+    } catch (error) {
+      console.error('Error regenerating embeddings:', error)
+      alert('❌ Error regenerating embeddings. Please check the console for details.')
+    } finally {
+      setRegeneratingEmbeddings(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -265,70 +312,76 @@ ${session.project_id ? 'The user is working on a specific writing project. ' : '
 
   return (
     <div className="flex flex-col h-full">
-      {/* Chat Header */}
-      <div className="border-b bg-muted/30">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 sm:p-4">
-          <div className="flex-1 min-w-0">
-            {session && editingTitle ? (
-              <div className="flex items-center gap-2">
+      {/* Header */}
+      <div className="flex items-center justify-between p-3 sm:p-4 border-b">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold">
+              {editingTitle ? (
                 <Input
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="text-base sm:text-lg font-semibold h-8"
+                  onBlur={() => {
+                    setEditingTitle(false)
+                    if (newTitle.trim() && session) {
+                      // Update session title
+                      chatAPI.updateSessionTitle(session.id, newTitle.trim())
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
-                      handleSaveTitle()
-                    } else if (e.key === 'Escape') {
-                      handleCancelEdit()
+                      setEditingTitle(false)
+                      if (newTitle.trim() && session) {
+                        chatAPI.updateSessionTitle(session.id, newTitle.trim())
+                      }
                     }
                   }}
                   autoFocus
+                  className="h-8 w-48"
                 />
-                <Button variant="ghost" size="sm" onClick={handleSaveTitle} className="h-8 px-2">
-                  ✓
-                </Button>
-                <Button variant="ghost" size="sm" onClick={handleCancelEdit} className="h-8 px-2">
-                  ✕
-                </Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-base sm:text-lg truncate">
-                  {session?.title || 'New Chat Session'}
-                </h2>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={handleStartEditTitle}
-                  className="h-7 w-7 p-0 opacity-70 hover:opacity-100 hover:bg-muted transition-all text-sm"
-                  title="Rename chat"
+              ) : (
+                <button
+                  onClick={() => {
+                    setNewTitle(session?.title || 'New Chat')
+                    setEditingTitle(true)
+                  }}
+                  className="hover:bg-accent hover:text-accent-foreground px-2 py-1 rounded text-left"
                 >
-                  ✏️
-                </Button>
-              </div>
-            )}
-            {selectedProjectId && !editingTitle && (
-              <p className="text-sm text-muted-foreground truncate">
-                Project: {getProjectName(selectedProjectId)}
-              </p>
+                  {session?.title || 'New Chat'}
+                </button>
+              )}
+            </h2>
+            {session && (
+              <button
+                onClick={() => {
+                  setNewTitle(session.title || 'New Chat')
+                  setEditingTitle(true)
+                }}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
             )}
           </div>
           
-          {!session && (
-            <div className="flex items-center">
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="px-3 py-1 text-sm border border-input rounded-md bg-background w-full sm:w-auto min-w-[150px] cursor-pointer hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
-              >
-                <option value="">General Chat</option>
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.title}
-                  </option>
-                ))}
-              </select>
+          {selectedProjectId && (
+            <div className="text-sm text-muted-foreground">
+              Project: {projects.find(p => p.id === selectedProjectId)?.title || 'Unknown'}
             </div>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-2">
+          {selectedProjectId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={regenerateEmbeddings}
+              disabled={regeneratingEmbeddings}
+              className="text-xs"
+            >
+              {regeneratingEmbeddings ? 'Regenerating...' : 'Fix Chat'}
+            </Button>
           )}
         </div>
       </div>

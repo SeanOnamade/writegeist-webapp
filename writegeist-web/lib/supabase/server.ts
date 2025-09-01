@@ -57,3 +57,31 @@ export async function createClient() {
     }
   )
 }
+
+/**
+ * Create a Supabase client with service role key that bypasses RLS policies
+ * Use this for internal API calls where authentication context is lost
+ */
+export async function createServiceRoleClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Supabase service role environment variables not set')
+  }
+
+  return createServerClient<Database>(
+    supabaseUrl,
+    supabaseServiceRoleKey,
+    {
+      cookies: {
+        getAll() {
+          return []
+        },
+        setAll() {
+          // No-op for service role client
+        },
+      },
+    }
+  )
+}

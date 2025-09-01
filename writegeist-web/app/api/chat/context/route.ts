@@ -7,15 +7,14 @@ export async function POST(request: NextRequest) {
     
     const supabase = await createClient()
     
-    // Get the real authenticated user ID
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    const realUserId = user?.id || userId || 'temp-user'
+    // Use the passed userId directly since internal fetch requests don't preserve auth context
+    const realUserId = userId || 'temp-user'
     
     console.log('Chat context request:')
     console.log('- Query:', query)
     console.log('- Project ID:', projectId)
     console.log('- User ID:', realUserId)
-    console.log('- Authenticated user:', user?.id || 'none')
+    console.log('- Using passed userId:', userId ? 'yes' : 'no')
     
     // First, try to get relevant context from the project
     let context = ""
@@ -83,17 +82,23 @@ export async function POST(request: NextRequest) {
       try {
         const searchResponse = await fetch(`${request.nextUrl.origin}/api/embeddings/search`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            // Pass the authentication headers from the original request
+            'Authorization': request.headers.get('Authorization') || '',
+            'Cookie': request.headers.get('Cookie') || ''
+          },
           body: JSON.stringify({ 
             query: query,
             projectId: projectId,
-            limit: 3
+            limit: 3,
+            userId: realUserId // Pass the user ID so embeddings search can use the correct API key
           })
         })
         
         if (searchResponse.ok) {
           const searchData = await searchResponse.json()
-                               if (searchData.results && searchData.results.length > 0) {
+          if (searchData.results && searchData.results.length > 0) {
             context += "\n=== MOST RELEVANT CONTENT (Vector Search) ===\n"
             
             // Group results by chapter to provide better attribution
@@ -128,23 +133,36 @@ export async function POST(request: NextRequest) {
             })
             
             context += "\n"
-             console.log('Vector search found', searchData.results.length, 'results')
-             console.log('First result similarity:', searchData.results[0]?.similarity)
-             console.log('First result preview:', searchData.results[0]?.content_text?.substring(0, 200))
-           } else {
-             console.log('No vector search results found - falling back to direct chapter content')
-             // Fallback: if no embeddings found, use the chapter content directly
-             if (fallbackChapters && fallbackChapters.length > 0) {
-               context += "\n=== CHAPTER CONTENT (Fallback) ===\n"
-               fallbackChapters.forEach(chapter => {
-                 if (chapter.content) {
-                   context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
-                   context += `${chapter.content}\n`
-                 }
-               })
-               context += "\n"
-             }
-           }
+            console.log('Vector search found', searchData.results.length, 'results')
+            console.log('First result similarity:', searchData.results[0]?.similarity)
+            console.log('First result preview:', searchData.results[0]?.content_text?.substring(0, 200))
+          } else {
+            console.log('No vector search results found - falling back to direct chapter content')
+            // Fallback: if no embeddings found, use the chapter content directly
+            if (fallbackChapters && fallbackChapters.length > 0) {
+              context += "\n=== CHAPTER CONTENT (Fallback) ===\n"
+              fallbackChapters.forEach(chapter => {
+                if (chapter.content) {
+                  context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
+                  context += `${chapter.content}\n`
+                }
+              })
+              context += "\n"
+            }
+          }
+        } else {
+          console.log('Vector search failed - falling back to direct chapter content')
+          // Fallback: if vector search fails, use chapter content directly
+          if (fallbackChapters && fallbackChapters.length > 0) {
+            context += "\n=== CHAPTER CONTENT (Fallback) ===\n"
+            fallbackChapters.forEach(chapter => {
+              if (chapter.content) {
+                context += `\n=== Chapter ${chapter.order_index}: ${chapter.title} ===\n`
+                context += `${chapter.content}\n`
+              }
+            })
+            context += "\n"
+          }
         }
       } catch (error) {
         console.error('Error performing vector search:', error)

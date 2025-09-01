@@ -4,15 +4,22 @@ import { getOpenAIApiKey } from '@/lib/api/openai-key'
 
 export async function POST(request: NextRequest) {
   try {
-    const { query, projectId, limit = 3 } = await request.json()
+    const { query, projectId, limit = 3, userId } = await request.json()
     
-    const { apiKey } = await getOpenAIApiKey()
+    // Use the same method as the chat API - this works correctly
+    const { apiKey, source } = await getOpenAIApiKey(userId)
+    
     if (!apiKey) {
+      console.error('No OpenAI API key available')
       return NextResponse.json(
         { error: 'OpenAI API key not configured. Please add it in Settings.' },
         { status: 500 }
       )
     }
+
+    console.log(`Using API key from: ${source}`)
+    console.log(`API key length: ${apiKey.length}`)
+    console.log(`API key starts with: ${apiKey.substring(0, 7)}...`)
 
     // Generate embedding for the query
     const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
@@ -29,7 +36,17 @@ export async function POST(request: NextRequest) {
     })
 
     if (!embeddingResponse.ok) {
-      console.error('Failed to generate query embedding')
+      const errorText = await embeddingResponse.text()
+      console.error('Failed to generate query embedding:', embeddingResponse.status, errorText)
+      
+      // If it's an authentication error, return a specific error
+      if (embeddingResponse.status === 401) {
+        return NextResponse.json(
+          { error: 'Invalid OpenAI API key. Please check your API key in Settings.' },
+          { status: 401 }
+        )
+      }
+      
       return NextResponse.json({ results: [] })
     }
 
@@ -88,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try with no project filter first to see if embeddings exist at all
-    const { data: allResults } = await supabase
+    const { data: allResults } = await (supabase as any)
       .rpc('search_embeddings', {
         query_embedding: queryEmbedding,
         match_threshold: 0.1,
@@ -98,13 +115,13 @@ export async function POST(request: NextRequest) {
 
     console.log('Search without project filter:', allResults?.length || 0)
 
-               const { data: results, error } = await supabase
-             .rpc('search_embeddings', {
-               query_embedding: queryEmbedding,
-               match_threshold: 0.1, // Much lower threshold to catch more results
-               match_count: limit * 4, // Get even more results to find best matches
-               project_filter: projectId
-             })
+    const { data: results, error } = await (supabase as any)
+      .rpc('search_embeddings', {
+        query_embedding: queryEmbedding,
+        match_threshold: 0.1, // Much lower threshold to catch more results
+        match_count: limit * 4, // Get even more results to find best matches
+        project_filter: projectId
+      })
 
     console.log('Vector search results:', results?.length || 0)
     if (results && results.length > 0) {
@@ -117,33 +134,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ results: [] })
     }
 
-               // Process and combine chunk results
-           const processedResults = results || []
-           
-           // If we have chunked results, combine them intelligently
-           const combinedResults = processedResults.slice(0, limit).map(result => {
-             // Add chunk information to metadata
-             const isChunk = result.content_type === 'chapter_chunk'
-             return {
-               ...result,
-               is_chunk: isChunk,
-               chunk_info: isChunk ? {
-                 chunk_index: result.metadata?.chunk_index,
-                 total_chunks: result.metadata?.total_chunks,
-                 chunk_start: result.metadata?.chunk_start,
-                 chunk_end: result.metadata?.chunk_end
-               } : null
-             }
-           })
+    // Process and combine chunk results
+    const processedResults = results || []
+    
+    // If we have chunked results, combine them intelligently
+    const combinedResults = processedResults.slice(0, limit).map((result: any) => {
+      // Add chunk information to metadata
+      const isChunk = result.content_type === 'chapter_chunk'
+      const metadata = result.metadata as any
+      return {
+        ...result,
+        is_chunk: isChunk,
+        chunk_info: isChunk ? {
+          chunk_index: metadata?.chunk_index,
+          total_chunks: metadata?.total_chunks,
+          chunk_start: metadata?.chunk_start,
+          chunk_end: metadata?.chunk_end
+        } : null
+      }
+    })
 
-           console.log('Processed results with chunk info:', combinedResults.length)
+    console.log('Processed results with chunk info:', combinedResults.length)
 
-           return NextResponse.json({ 
-             results: combinedResults,
-             query: query,
-             total_found: processedResults.length,
-             chunks_found: processedResults.filter(r => r.content_type === 'chapter_chunk').length
-           })
+    return NextResponse.json({ 
+      results: combinedResults,
+      query: query,
+      total_found: processedResults.length,
+      chunks_found: processedResults.filter((r: any) => r.content_type === 'chapter_chunk').length
+    })
 
   } catch (error) {
     console.error('Embedding search error:', error)

@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
           .insert({
             content_text: chunk.text,
             content_hash: Buffer.from(chunk.text).toString('base64').substring(0, 50),
-            embedding: JSON.stringify(embedding),
+            embedding: embedding, // Store as array directly, not JSON string
             chapter_id: chapterId,
             project_id: projectId,
             user_id: user.id,
