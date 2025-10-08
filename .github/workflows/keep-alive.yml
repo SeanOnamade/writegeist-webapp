@@ -1,0 +1,28 @@
+name: Keep Supabase Alive
+
+# Run every 6 days to stay well under the 7-day limit
+on:
+  schedule:
+    - cron: '0 12 * * 0'  # Every Sunday at 12:00 UTC (6 days apart)
+  workflow_dispatch:  # Allow manual trigger for testing
+
+jobs:
+  keep-alive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2  # Fail fast if something goes wrong
+    
+    steps:
+      - name: Ping Supabase Project
+        run: |
+          # Simple health check - just ping the Supabase REST API
+          # This is completely read-only and can't affect your data
+          curl -s -f -X GET \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Accept: application/json" \
+            --max-time 30 \
+            --retry 2 \
+            --retry-delay 5
+          
+          echo "✅ Supabase project pinged successfully"
