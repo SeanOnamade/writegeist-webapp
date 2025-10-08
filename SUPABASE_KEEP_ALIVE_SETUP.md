@@ -22,8 +22,8 @@ This setup prevents your Supabase project from being paused due to inactivity (7
    - Go to your GitHub repository
    - Navigate to Settings → Secrets and variables → Actions
    - Add these repository secrets:
-     - `SUPABASE_URL`: Your Supabase project URL (e.g., `https://your-project.supabase.co`)
-     - `SUPABASE_ANON_KEY`: Your Supabase anon/public key
+     - `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase project URL (e.g., `https://your-project.supabase.co`)
+     - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase anon/public key
 
 2. **Test the Workflow:**
    - Go to Actions tab in your GitHub repository
