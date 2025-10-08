@@ -1,6 +1,7 @@
 name: Keep Supabase Alive
 
 # Run every 6 days to stay well under the 7-day limit
+# This workflow prevents Supabase project from pausing due to inactivity
 on:
   schedule:
     - cron: '0 12 * * 0'  # Every Sunday at 12:00 UTC (6 days apart)
