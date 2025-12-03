@@ -65,5 +65,33 @@ export const audioAPI = {
       console.error('Error getting audio URL:', error)
       return null
     }
+  },
+
+  /**
+   * Delete audio for a chapter
+   * @param chapterId - The chapter ID to delete audio for
+   * @returns Success status and deleted file size
+   */
+  async deleteByChapter(chapterId: string): Promise<{ success: boolean; deleted_file_size?: number; error?: string }> {
+    try {
+      const response = await fetch(`/api/audio/${chapterId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        return { success: false, error: errorData.error || 'Failed to delete audio' }
+      }
+
+      const data = await response.json()
+      return { success: true, deleted_file_size: data.deleted_file_size }
+    } catch (error) {
+      console.error('Error deleting audio:', error)
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to delete audio' 
+      }
+    }
   }
 }

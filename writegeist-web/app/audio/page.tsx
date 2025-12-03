@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Headphones, Download, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, BookOpen, Book } from 'lucide-react'
+import { Headphones, Download, RefreshCw, Clock, CheckCircle, AlertCircle, Loader2, BookOpen, Book, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -58,6 +58,7 @@ export default function AudioPage() {
   const [apiKeyValidated, setApiKeyValidated] = useState<boolean | null>(null) // Cache validation result
   const [validatingKey, setValidatingKey] = useState<Set<string>>(new Set()) // Track validation in progress
   const [generationProgress, setGenerationProgress] = useState<Map<string, { progress: number, message: string }>>(new Map())
+  const [deletingAudio, setDeletingAudio] = useState<Set<string>>(new Set())
 // Removed unused playingAudio state
   const { toast } = useToast()
 
@@ -335,6 +336,60 @@ export default function AudioPage() {
     return `${mb.toFixed(1)} MB`
   }
 
+  // Delete audio for a chapter
+  const deleteAudio = async (chapter: ChapterWithAudio) => {
+    if (!chapter.audio) {
+      toast({
+        title: "Delete Failed",
+        description: "No audio file found for this chapter.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Confirm deletion
+    if (!confirm(`Are you sure you want to delete the audio for "${chapter.title}"? This will free up ${formatFileSize(chapter.audio.file_size || 0)} of storage space.`)) {
+      return
+    }
+
+    try {
+      setDeletingAudio(prev => new Set(prev).add(chapter.id))
+
+      const response = await fetch(`/api/audio/${chapter.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Delete failed: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      toast({
+        title: "Audio Deleted",
+        description: `Audio for "${chapter.title}" has been deleted. ${data.deleted_file_size ? `Freed ${formatFileSize(data.deleted_file_size)} of space.` : ''}`,
+      })
+
+      // Refresh library to reflect changes
+      await loadAudioLibrary()
+    } catch (error) {
+      console.error('Delete failed:', error)
+      toast({
+        title: "Delete Failed",
+        description: error instanceof Error ? error.message : "Failed to delete audio file. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeletingAudio(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(chapter.id)
+        return newSet
+      })
+    }
+  }
+
   // Get status badge with outdated detection
   const getStatusBadge = (chapter: ChapterWithAudio) => {
     const isGenerating = generatingAudio.has(chapter.id)
@@ -549,7 +604,7 @@ export default function AudioPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => generateAudio(chapter.id, chapter.title, true)}
-                          disabled={generatingAudio.has(chapter.id) || validatingKey.has(chapter.id)}
+                          disabled={generatingAudio.has(chapter.id) || validatingKey.has(chapter.id) || deletingAudio.has(chapter.id)}
                           className="gap-2 w-full md:flex-1 md:w-auto min-w-0 relative z-10 hover:z-20"
                         >
                           {validatingKey.has(chapter.id) ? (
@@ -566,6 +621,25 @@ export default function AudioPage() {
                             <>
                               <RefreshCw className="h-4 w-4" />
                               Regenerate
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteAudio(chapter)}
+                          disabled={deletingAudio.has(chapter.id)}
+                          className="gap-2 flex-1 md:flex-1 min-w-0 relative z-10 hover:z-20 text-red-400 hover:text-red-300 hover:border-red-500/50"
+                        >
+                          {deletingAudio.has(chapter.id) ? (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                              Deleting...
+                            </>
+                          ) : (
+                            <>
+                              <Trash2 className="h-4 w-4" />
+                              Delete
                             </>
                           )}
                         </Button>
