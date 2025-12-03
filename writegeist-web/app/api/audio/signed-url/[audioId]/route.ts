@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+/**
+ * GET /api/audio/signed-url/[audioId]
+ * Generate a signed URL for an audio file (expires in 1 hour)
+ * This avoids Vercel egress charges by serving files directly from Supabase
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ audioId: string }> }
@@ -17,8 +22,6 @@ export async function GET(
         { status: 401 }
       )
     }
-
-    console.log('Downloading audio for ID:', audioId)
 
     // Get audio record to verify ownership and get file path
     const { data: audio, error: audioError } = await supabase
@@ -37,45 +40,36 @@ export async function GET(
 
     if (audio.status !== 'completed' || !audio.file_path) {
       return NextResponse.json(
-        { error: 'Audio file not ready for download' },
+        { error: 'Audio file not ready' },
         { status: 400 }
       )
     }
 
-    console.log('Downloading file from storage:', audio.file_path)
-
-    // Download file from Supabase Storage
-    const { data: fileData, error: downloadError } = await supabase.storage
+    // Generate signed URL (expires in 1 hour = 3600 seconds)
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from('audio-files')
-      .download(audio.file_path)
+      .createSignedUrl(audio.file_path, 3600)
 
-    if (downloadError || !fileData) {
-      console.error('Storage download error:', downloadError)
+    if (signedUrlError || !signedUrlData) {
+      console.error('Error generating signed URL:', signedUrlError)
       return NextResponse.json(
-        { error: 'Failed to download audio file from storage' },
+        { error: 'Failed to generate signed URL' },
         { status: 500 }
       )
     }
 
-    console.log('File downloaded successfully, size:', fileData.size)
-
-    // Return the file as a response
-    // Note: Consider redirecting to audio_url (Supabase public URL) instead to avoid Vercel egress
-    return new NextResponse(fileData.stream(), {
-      status: 200,
-      headers: {
-        'Content-Type': 'audio/mpeg',
-        'Content-Length': fileData.size.toString(),
-        'Content-Disposition': `attachment; filename="chapter_${audio.chapter_id}_audio.mp3"`,
-        'Cache-Control': 'no-cache, no-store, must-revalidate' // Prevent Vercel caching to reduce egress
-      }
+    return NextResponse.json({
+      success: true,
+      signedUrl: signedUrlData.signedUrl,
+      expiresIn: 3600
     })
 
   } catch (error) {
-    console.error('Audio download error:', error)
+    console.error('Signed URL generation error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
 }
+

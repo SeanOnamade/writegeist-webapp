@@ -54,13 +54,15 @@ export async function GET(
     }
 
     // Return the file for streaming
+    // Note: This route should only be used as fallback. Prefer using audio_url (Supabase public URL) directly
+    // to avoid Vercel Cached Egress charges
     return new NextResponse(fileData.stream(), {
       status: 200,
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Length': fileData.size.toString(),
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'private, max-age=3600'
+        'Cache-Control': 'no-cache, no-store, must-revalidate' // Prevent Vercel caching to reduce egress
       }
     })
 

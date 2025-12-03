@@ -17,6 +17,7 @@ export async function GET(request: NextRequest) {
     console.log('Loading audio library for user:', user.id)
 
     // Get all chapters for the user with their audio status
+    // Note: We only select content_length to calculate preview, not full content to reduce egress
     const { data: chapters, error: chaptersError } = await supabase
       .from('chapters')
       .select(`
@@ -64,9 +65,31 @@ export async function GET(request: NextRequest) {
 
     console.log(`Found ${audioData.length} audio records`)
 
+    // Generate signed URLs for all completed audio files
+    const audioWithSignedUrls = await Promise.all(
+      audioData
+        .filter(a => a.status === 'completed' && a.file_path)
+        .map(async (audio) => {
+          try {
+            const { data: signedUrlData } = await supabase.storage
+              .from('audio-files')
+              .createSignedUrl(audio.file_path, 3600) // 1 hour expiration
+            
+            return {
+              ...audio,
+              signedUrl: signedUrlData?.signedUrl || null
+            }
+          } catch (error) {
+            console.error('Error generating signed URL for audio:', audio.id, error)
+            return { ...audio, signedUrl: null }
+          }
+        })
+    )
+
     // Combine chapters with their audio status and outdated detection
     const chaptersWithAudio = chapters?.map(chapter => {
-      const audio = audioData.find(a => a.chapter_id === chapter.id)
+      const audio = audioWithSignedUrls.find(a => a.chapter_id === chapter.id) || 
+                    audioData.find(a => a.chapter_id === chapter.id)
       
       // Check if audio is outdated (compare content hashes)
       let isOutdated = false
@@ -81,13 +104,21 @@ export async function GET(request: NextRequest) {
         }
       }
       
+      // Don't send full content - only preview to reduce egress
+      const { content, ...chapterWithoutContent } = chapter
+      
       return {
-        ...chapter,
-        audio: audio ? { ...audio, isOutdated } : null,
+        ...chapterWithoutContent,
+        audio: audio ? { 
+          ...audio, 
+          isOutdated,
+          // Include signedUrl if available, otherwise fallback to audio_url or null
+          playUrl: audio.signedUrl || audio.audio_url || null
+        } : null,
         project: chapter.projects,
-        // Calculate content preview
-        content_preview: chapter.content 
-          ? chapter.content.substring(0, 200) + (chapter.content.length > 200 ? '...' : '')
+        // Calculate content preview (don't send full content to reduce egress)
+        content_preview: content 
+          ? content.substring(0, 200) + (content.length > 200 ? '...' : '')
           : 'No content'
       }
     }) || []

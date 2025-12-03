@@ -575,7 +575,7 @@ export default function AudioPage() {
                           className="w-full"
                           preload="metadata"
                         >
-                          <source src={`/api/audio/stream/${chapter.audio.id}`} type="audio/mpeg" />
+                          <source src={chapter.audio.playUrl || chapter.audio.audio_url || `/api/audio/stream/${chapter.audio.id}`} type="audio/mpeg" />
                           Your browser does not support the audio element.
                         </audio>
                       </div>
