@@ -11,6 +11,8 @@ interface AudioInfo {
   id: string
   status: 'pending' | 'processing' | 'completed' | 'error' | 'outdated'
   audio_url?: string
+  playUrl?: string
+  signedUrl?: string
   duration?: number
   file_size?: number
   voice_model?: string
@@ -22,7 +24,7 @@ interface AudioInfo {
 interface ChapterWithAudio {
   id: string
   title: string
-  content: string
+  content?: string  // Optional - not always passed to reduce egress
   content_preview: string
   project_id: string
   order_index: number
@@ -70,7 +72,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
 
       const chapterData = await response.json()
       if (chapterData && typeof chapterData === 'object') {
-        setFullContent(chapterData.content || chapter.content || '')
+        setFullContent(chapterData.content || chapter.content || chapter.content_preview || '')
       } else {
         throw new Error('Invalid chapter data format')
       }
@@ -78,7 +80,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
       console.error('Error loading chapter content:', err)
       setError('Failed to load chapter content')
       // Fallback to the content we already have
-      setFullContent(chapter?.content || '')
+      setFullContent(chapter?.content || chapter?.content_preview || '')
     } finally {
       setLoading(false)
     }
@@ -97,7 +99,8 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
     return `${mb.toFixed(1)} MB`
   }
 
-  const countWords = (text: string) => {
+  const countWords = (text: string | undefined) => {
+    if (!text) return 0
     return text.trim().split(/\s+/).length
   }
 
@@ -124,7 +127,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
               <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground mt-1">
                 <div className="flex items-center gap-1">
                   <FileText className="h-3 w-3 md:h-4 md:w-4" />
-                  <span>{countWords(fullContent || chapter.content).toLocaleString()} words</span>
+                  <span>{countWords(fullContent || chapter.content || chapter.content_preview).toLocaleString()} words</span>
                 </div>
                 {chapter.audio && chapter.audio.duration && (
                   <div className="flex items-center gap-1">
@@ -171,7 +174,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
                 className="w-full h-10 md:h-12"
                 preload="metadata"
               >
-                <source src={`/api/audio/stream/${chapter.audio.id}`} type="audio/mpeg" />
+                <source src={chapter.audio.playUrl || chapter.audio.audio_url || `/api/audio/stream/${chapter.audio.id}`} type="audio/mpeg" />
                 Your browser does not support the audio element.
               </audio>
             </div>

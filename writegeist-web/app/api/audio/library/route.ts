@@ -71,9 +71,14 @@ export async function GET(request: NextRequest) {
         .filter(a => a.status === 'completed' && a.file_path)
         .map(async (audio) => {
           try {
-            const { data: signedUrlData } = await supabase.storage
+            const { data: signedUrlData, error: signedUrlError } = await supabase.storage
               .from('audio-files')
               .createSignedUrl(audio.file_path, 3600) // 1 hour expiration
+            
+            if (signedUrlError) {
+              console.error('Error generating signed URL for audio:', audio.id, signedUrlError)
+              return { ...audio, signedUrl: null }
+            }
             
             return {
               ...audio,
@@ -92,17 +97,10 @@ export async function GET(request: NextRequest) {
                     audioData.find(a => a.chapter_id === chapter.id)
       
       // Check if audio is outdated (compare content hashes)
+      // Note: We skip this check to reduce egress - content is not fetched for library view
+      // Outdated status can be checked when generating new audio
       let isOutdated = false
-      if (audio && audio.status === 'completed' && chapter.content) {
-        try {
-          // Create current content hash (same logic as generation)
-          const cleanedContent = cleanTextForTTS(chapter.content)
-          const currentHash = Buffer.from(cleanedContent).toString('base64').substring(0, 50)
-          isOutdated = audio.content_hash !== currentHash
-        } catch (error) {
-          console.warn('Error checking outdated status for chapter:', chapter.id)
-        }
-      }
+      // Removed outdated check here to reduce egress - content not available in library view
       
       // Don't send full content - only preview to reduce egress
       const { content, ...chapterWithoutContent } = chapter
