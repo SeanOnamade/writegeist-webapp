@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd writegeist-web && npm run build",
-  "outputDirectory": "writegeist-web/.next",
-  "installCommand": "cd writegeist-web && npm install --legacy-peer-deps",
-  "framework": "nextjs"
-}
