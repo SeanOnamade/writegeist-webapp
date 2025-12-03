@@ -348,7 +348,7 @@ export default function AudioPage() {
     }
 
     // Confirm deletion
-    if (!confirm(`Are you sure you want to delete the audio for "${chapter.title}"? This will free up ${formatFileSize(chapter.audio.file_size || 0)} of storage space.`)) {
+    if (!confirm(`Are you sure you want to delete the audio for ${chapter.title}? This will free up ${formatFileSize(chapter.audio.file_size || 0)} of storage space.`)) {
       return
     }
 
@@ -369,7 +369,7 @@ export default function AudioPage() {
       
       toast({
         title: "Audio Deleted",
-        description: `Audio for "${chapter.title}" has been deleted. ${data.deleted_file_size ? `Freed ${formatFileSize(data.deleted_file_size)} of space.` : ''}`,
+        description: `Audio for ${chapter.title} has been deleted. ${data.deleted_file_size ? `Freed ${formatFileSize(data.deleted_file_size)} of space.` : ''}`,
       })
 
       // Refresh library to reflect changes
