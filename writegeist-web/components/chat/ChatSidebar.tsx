@@ -11,9 +11,10 @@ interface ChatSidebarProps {
   selectedSessionId?: string
   onSessionSelect: (session: ChatSession) => void
   onNewChat: () => void
+  refreshKey?: number
 }
 
-export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat }: ChatSidebarProps) {
+export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, refreshKey }: ChatSidebarProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -24,7 +25,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat }: C
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [refreshKey])
 
   const loadData = async () => {
     try {

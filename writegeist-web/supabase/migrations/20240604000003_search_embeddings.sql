@@ -1,5 +1,8 @@
 -- Vector similarity search RPC used by the embeddings search API.
 -- Modeled on search_documents with a project_filter arg.
+-- Must drop first: CREATE OR REPLACE cannot change an existing function's return type.
+
+DROP FUNCTION IF EXISTS public.search_embeddings(vector, double precision, integer, uuid);
 
 CREATE OR REPLACE FUNCTION public.search_embeddings(
     query_embedding vector(1536),

@@ -552,7 +552,47 @@ export const chatOperations = {
     }
 
     return data
-  }
+  },
+
+  async updateSession(
+    id: string,
+    updates: { title?: string; project_id?: string | null }
+  ): Promise<ChatSession | null> {
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error updating chat session:', error)
+      return null
+    }
+
+    return data
+  },
+
+  async deleteSession(id: string): Promise<boolean> {
+    const { error: messagesError } = await supabase
+      .from('chat_messages')
+      .delete()
+      .eq('session_id', id)
+
+    if (messagesError) {
+      console.error('Error deleting chat messages:', messagesError)
+      return false
+    }
+
+    const { error } = await supabase.from('chat_sessions').delete().eq('id', id)
+
+    if (error) {
+      console.error('Error deleting chat session:', error)
+      return false
+    }
+
+    return true
+  },
 }
 
 // Search operations

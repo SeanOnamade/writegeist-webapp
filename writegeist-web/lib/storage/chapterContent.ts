@@ -108,11 +108,7 @@ export class ChapterContentStorage {
           })
         })
         
-        if (embeddingResponse.ok) {
-          const embeddingResult = await embeddingResponse.json()
-          console.log(`Chunked embeddings generated successfully: ${embeddingResult.successfulEmbeddings}/${embeddingResult.totalChunks} chunks`)
-          console.log('Skipping old single embedding generation - using chunked embeddings only')
-        } else {
+        if (!embeddingResponse.ok) {
           console.log('Chunked embedding generation failed, but content saved')
         }
       } catch (embeddingError) {
