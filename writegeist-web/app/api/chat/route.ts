@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
     let confidence: 'high' | 'low' = 'high'
     let isSummary = false
     let isThematic = false
+    let isSpeculative = false
 
     if (projectId) {
       const contextResult = await buildProjectContext(
@@ -48,14 +49,15 @@ export async function POST(request: NextRequest) {
       confidence = contextResult.confidence
       isSummary = contextResult.isSummary
       isThematic = contextResult.isThematic
+      isSpeculative = contextResult.isSpeculative
     }
 
     const systemContent = projectContext
-      ? `${buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic })}
+      ? `${buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic, isSpeculative })}
 
 PROJECT CONTEXT:
 ${buildContextInjection(projectContext)}`
-      : buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic })
+      : buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic, isSpeculative })
 
     const enhancedMessages = [...messages]
     if (enhancedMessages.length > 0 && enhancedMessages[0].role === 'system') {

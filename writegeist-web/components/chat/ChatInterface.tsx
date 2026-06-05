@@ -295,6 +295,16 @@ export function ChatInterface({
     return meta?.confidence ?? null
   }
 
+  const isRefusalMessage = (content: string): boolean =>
+    /don't see that in your manuscript/i.test(content)
+
+  const shouldShowCitations = (message: ChatMessage, citations: ContextCitation[]): boolean => {
+    if (citations.length === 0) return false
+    if (message.role !== 'assistant' || !isRefusalMessage(message.content)) return true
+    const maxSimilarity = Math.max(...citations.map((c) => c.similarity))
+    return maxSimilarity >= 0.4
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -443,7 +453,7 @@ export function ChatInterface({
                         Low manuscript match — answer may be incomplete.
                       </p>
                     )}
-                    {groupedCitations.length > 0 && (
+                    {shouldShowCitations(message, citations) && groupedCitations.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-border/50 text-xs opacity-80">
                         <div className="font-medium mb-1">Sources:</div>
                         {groupedCitations.map((group) => {
@@ -451,7 +461,7 @@ export function ChatInterface({
                           const isExpanded = expandedCitations.has(`${message.id}-${key}`)
                           const excerptCount = group.excerpts.length
                           return (
-                            <div key={key} className="mb-1">
+                            <div key={`${message.id}-${key}`} className="mb-1">
                               <div className="flex items-center gap-1 flex-wrap">
                                 {excerptCount > 1 && (
                                   <button

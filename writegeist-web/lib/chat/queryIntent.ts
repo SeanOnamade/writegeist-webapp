@@ -19,6 +19,14 @@ export function isThematicQuery(query: string): boolean {
   return (
     /\b(theme|themes|motif|motifs|symbolism|symbolic|meaning|tone|message)\b/.test(q) ||
     /\bwhat is (the |this )?(book|story|novel) (about|really about)\b/.test(q) ||
-    /\bso far\b/.test(q) && /\b(theme|about|meaning)\b/.test(q)
+    (/\bso far\b/.test(q) && /\b(theme|about|meaning)\b/.test(q))
+  )
+}
+
+export function isSpeculativeQuery(query: string): boolean {
+  const q = query.toLowerCase()
+  return (
+    /\b(how will|how do you think|what will happen|how might|how could|predict)\b/.test(q) ||
+    /\b(going to end|will end|the ending|how it ends|how does it end)\b/.test(q)
   )
 }

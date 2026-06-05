@@ -1,6 +1,6 @@
 export function buildManuscriptSystemPrompt(
   projectTitle: string,
-  options?: { isSummary?: boolean; isThematic?: boolean }
+  options?: { isSummary?: boolean; isThematic?: boolean; isSpeculative?: boolean }
 ): string {
   const summaryRule = options?.isSummary
     ? '- When asked to summarize, synthesize from the provided excerpts — especially opening chapters. Give a coherent summary rather than refusing.'
@@ -8,6 +8,10 @@ export function buildManuscriptSystemPrompt(
 
   const thematicRule = options?.isThematic
     ? '- When asked about themes or meaning, infer from patterns in the provided excerpts. State interpretations supported by the text and cite chapters. Do not refuse if excerpts are present.'
+    : ''
+
+  const speculativeRule = options?.isSpeculative
+    ? '- When asked to predict an unwritten ending, say the manuscript has not reached that point yet. If excerpts contain foreshadowing or clues, describe them and cite chapters. Do not invent a ending.'
     : ''
 
   return `You are a manuscript assistant for the writing project "${projectTitle}".
@@ -23,6 +27,7 @@ Rules:
 - When answering relationship or character questions, name the characters explicitly (e.g. "Lucian and Tal").
 ${summaryRule}
 ${thematicRule}
+${speculativeRule}
 - Keep answers concise but complete.`
 }
 

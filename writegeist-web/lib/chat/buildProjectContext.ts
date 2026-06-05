@@ -1,7 +1,12 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { searchProjectEmbeddings, type EmbeddingSearchResult } from '@/lib/embeddings/searchProject'
 import { hasProjectEmbeddings, indexProjectEmbeddings } from '@/lib/embeddings/indexProject'
-import { getTargetChapterOrder, isOpeningOrSummaryQuery, isThematicQuery } from '@/lib/chat/queryIntent'
+import {
+  getTargetChapterOrder,
+  isOpeningOrSummaryQuery,
+  isSpeculativeQuery,
+  isThematicQuery,
+} from '@/lib/chat/queryIntent'
 
 export interface ContextCitation {
   chapterId: string | null
@@ -21,6 +26,7 @@ export interface BuildProjectContextResult {
   confidence: 'high' | 'low'
   isSummary: boolean
   isThematic: boolean
+  isSpeculative: boolean
 }
 
 const OPENING_EXCERPT_CHARS = 2500
@@ -198,6 +204,7 @@ export async function buildProjectContext(
   const intentQuery = latestUserQuery.trim() || searchQuery
   const isSummary = isOpeningOrSummaryQuery(intentQuery)
   const isThematic = isThematicQuery(intentQuery)
+  const isSpeculative = isSpeculativeQuery(intentQuery)
   const targetChapterOrder = getTargetChapterOrder(intentQuery)
 
   if (isSummary && chaptersWithContent.length > 0) {
@@ -300,5 +307,6 @@ export async function buildProjectContext(
     confidence: boostedConfidence,
     isSummary,
     isThematic,
+    isSpeculative,
   }
 }

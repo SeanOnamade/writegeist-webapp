@@ -14,10 +14,20 @@ export interface EmbeddingSearchResult {
 
 const MATCH_THRESHOLD = 0.25
 const DEFAULT_LIMIT = 8
+const KEYWORD_MAX_SIMILARITY = 0.35
+
+const STOP_WORDS = new Set([
+  'how', 'what', 'who', 'when', 'where', 'why', 'the', 'you', 'your', 'think',
+  'will', 'does', 'about', 'that', 'this', 'far', 'are', 'for', 'and', 'but',
+  'with', 'from', 'have', 'has', 'been', 'would', 'could', 'should', 'into',
+])
 
 export function extractSearchTerms(query: string): string[] {
   const stripped = query
-    .replace(/^(who is|what is|tell me about|describe|what happens|how does|where is|when does|what about)\s+/gi, '')
+    .replace(
+      /^(who is|what is|tell me about|describe|what happens|how does|where is|when does|what about|how do you think|how will)\s+/gi,
+      ''
+    )
     .trim()
 
   const terms = new Set<string>()
@@ -27,7 +37,7 @@ export function extractSearchTerms(query: string): string[] {
   }
 
   for (const word of stripped.toLowerCase().split(/\s+/)) {
-    if (word.length > 2) {
+    if (word.length > 2 && !STOP_WORDS.has(word)) {
       terms.add(word)
     }
   }
@@ -102,7 +112,7 @@ async function keywordSearch(
       fallbackResults.push(
         ...termResults.map((r, index) => ({
           ...r,
-          similarity: 0.55 - index * 0.03,
+          similarity: KEYWORD_MAX_SIMILARITY - index * 0.02,
         }))
       )
     }
@@ -118,13 +128,20 @@ function mergeResults(
   keywordResults: EmbeddingSearchResult[],
   limit: number
 ): EmbeddingSearchResult[] {
+  const vectorIds = new Set(vectorResults.map((r) => r.id))
   const merged = new Map<string, EmbeddingSearchResult>()
 
-  for (const result of [...vectorResults, ...keywordResults]) {
-    const existing = merged.get(result.id)
-    if (!existing || result.similarity > existing.similarity) {
-      merged.set(result.id, result)
+  for (const result of vectorResults) {
+    merged.set(result.id, result)
+  }
+
+  for (const result of keywordResults) {
+    if (vectorIds.has(result.id)) continue
+    const capped = {
+      ...result,
+      similarity: Math.min(result.similarity, KEYWORD_MAX_SIMILARITY),
     }
+    merged.set(result.id, capped)
   }
 
   return [...merged.values()].sort((a, b) => b.similarity - a.similarity).slice(0, limit)
