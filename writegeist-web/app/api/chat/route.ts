@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
     }
 
     const searchQuery = buildSearchQuery(messages)
+    const latestUserQuery =
+      [...messages].reverse().find((m: { role: string }) => m.role === 'user')?.content || ''
     let projectContext = ''
     let citations: Array<{ chapterId: string | null; chapterTitle: string; similarity: number; excerpt: string }> = []
     let indexed = false
@@ -29,9 +31,15 @@ export async function POST(request: NextRequest) {
     let projectTitle = 'your project'
     let confidence: 'high' | 'low' = 'high'
     let isSummary = false
+    let isThematic = false
 
     if (projectId) {
-      const contextResult = await buildProjectContext(searchQuery, projectId, userId)
+      const contextResult = await buildProjectContext(
+        searchQuery,
+        projectId,
+        userId,
+        latestUserQuery
+      )
       projectContext = contextResult.context
       citations = contextResult.citations
       indexed = contextResult.indexed
@@ -39,14 +47,15 @@ export async function POST(request: NextRequest) {
       projectTitle = contextResult.projectTitle
       confidence = contextResult.confidence
       isSummary = contextResult.isSummary
+      isThematic = contextResult.isThematic
     }
 
     const systemContent = projectContext
-      ? `${buildManuscriptSystemPrompt(projectTitle, { isSummary })}
+      ? `${buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic })}
 
 PROJECT CONTEXT:
 ${buildContextInjection(projectContext)}`
-      : buildManuscriptSystemPrompt(projectTitle, { isSummary })
+      : buildManuscriptSystemPrompt(projectTitle, { isSummary, isThematic })
 
     const enhancedMessages = [...messages]
     if (enhancedMessages.length > 0 && enhancedMessages[0].role === 'system') {

@@ -23,14 +23,23 @@ export function buildSearchQuery(messages: ChatMessage[]): string {
   const latest = userMessages[userMessages.length - 1]
   const wordCount = latest.split(/\s+/).length
   const needsContext =
-    wordCount < 8 || PRONOUN_PATTERN.test(latest) || latest.endsWith('?') && wordCount < 12
+    wordCount < 6 ||
+    PRONOUN_PATTERN.test(latest) ||
+    /^(what about|how about|and what|tell me more)/i.test(latest)
 
   let query = latest
 
   if (needsContext && userMessages.length > 1) {
     const previous = userMessages[userMessages.length - 2]
-    if (!latest.toLowerCase().includes(previous.toLowerCase().slice(0, 20))) {
-      query = `${previous} ${latest}`
+    // Append key terms from the prior question, not the full prior message (avoids polluting intent)
+    const prevTerms = previous
+      .replace(/^(who is|what is|summarize|tell me about|describe)\s+/i, '')
+      .split(/\s+/)
+      .filter((t) => t.length > 3)
+      .slice(0, 4)
+      .join(' ')
+    if (prevTerms && !latest.toLowerCase().includes(prevTerms.toLowerCase().slice(0, 15))) {
+      query = `${latest} ${prevTerms}`
     }
   }
 

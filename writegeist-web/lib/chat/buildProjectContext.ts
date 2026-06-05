@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { searchProjectEmbeddings, type EmbeddingSearchResult } from '@/lib/embeddings/searchProject'
 import { hasProjectEmbeddings, indexProjectEmbeddings } from '@/lib/embeddings/indexProject'
-import { getTargetChapterOrder, isOpeningOrSummaryQuery } from '@/lib/chat/queryIntent'
+import { getTargetChapterOrder, isOpeningOrSummaryQuery, isThematicQuery } from '@/lib/chat/queryIntent'
 
 export interface ContextCitation {
   chapterId: string | null
@@ -20,6 +20,7 @@ export interface BuildProjectContextResult {
   hasContent: boolean
   confidence: 'high' | 'low'
   isSummary: boolean
+  isThematic: boolean
 }
 
 const OPENING_EXCERPT_CHARS = 2500
@@ -84,15 +85,16 @@ function appendChapterExcerpts(
   citations: ContextCitation[],
   chapters: Array<{ id: string; order_index: number; title: string; content: string }>,
   sectionTitle: string,
-  baseSimilarity = 0.85
+  baseSimilarity = 0.85,
+  maxChars = OPENING_EXCERPT_CHARS
 ): string {
   let updated = `${context}\n=== ${sectionTitle} ===\n`
 
   for (const chapter of chapters) {
-    const excerpt = chapter.content.substring(0, OPENING_EXCERPT_CHARS)
+    const excerpt = chapter.content.substring(0, maxChars)
     const chapterTitle = `Chapter ${chapter.order_index}: ${chapter.title}`
     updated += `\n=== ${chapterTitle.toUpperCase()} ===\n${excerpt}`
-    if (chapter.content.length > OPENING_EXCERPT_CHARS) {
+    if (chapter.content.length > maxChars) {
       updated += '\n...[content truncated]...'
     }
     updated += '\n'
@@ -135,7 +137,8 @@ function dedupeCitationsByChapter(citations: ContextCitation[]): ContextCitation
 export async function buildProjectContext(
   searchQuery: string,
   projectId: string,
-  userId: string
+  userId: string,
+  latestUserQuery = ''
 ): Promise<BuildProjectContextResult> {
   const supabase = await createServiceRoleClient()
 
@@ -192,8 +195,10 @@ export async function buildProjectContext(
 
   const citations: ContextCitation[] = []
   let searchResults: EmbeddingSearchResult[] = []
-  const isSummary = isOpeningOrSummaryQuery(searchQuery)
-  const targetChapterOrder = getTargetChapterOrder(searchQuery)
+  const intentQuery = latestUserQuery.trim() || searchQuery
+  const isSummary = isOpeningOrSummaryQuery(intentQuery)
+  const isThematic = isThematicQuery(intentQuery)
+  const targetChapterOrder = getTargetChapterOrder(intentQuery)
 
   if (isSummary && chaptersWithContent.length > 0) {
     const openingChapters = chaptersWithContent
@@ -216,6 +221,21 @@ export async function buildProjectContext(
         `CHAPTER ${targetChapterOrder} CONTENT`,
         0.9
       )
+    }
+  } else if (isThematic && chaptersWithContent.length > 0) {
+    const earlyChapters = chaptersWithContent
+      .filter((c) => c.order_index <= 6)
+      .sort((a, b) => a.order_index - b.order_index)
+    context = appendChapterExcerpts(
+      context,
+      citations,
+      earlyChapters,
+      'EARLY CHAPTERS (for thematic analysis)',
+      0.75,
+      1200
+    )
+    if (searchQuery.trim() && indexed) {
+      searchResults = await searchProjectEmbeddings(searchQuery, projectId, userId, 8)
     }
   } else if (searchQuery.trim() && indexed) {
     searchResults = await searchProjectEmbeddings(searchQuery, projectId, userId, 8)
@@ -267,8 +287,8 @@ export async function buildProjectContext(
     : 0
   const confidence: 'high' | 'low' = maxSimilarity >= 0.4 ? 'high' : 'low'
 
-  const summaryConfidence: 'high' | 'low' =
-    isSummary && displayCitations.length > 0 ? 'high' : confidence
+  const boostedConfidence: 'high' | 'low' =
+    (isSummary || isThematic) && displayCitations.length > 0 ? 'high' : confidence
 
   return {
     context: truncateContext(context),
@@ -277,7 +297,8 @@ export async function buildProjectContext(
     indexed,
     indexing,
     hasContent: chaptersWithContent.length > 0 || indexed,
-    confidence: summaryConfidence,
+    confidence: boostedConfidence,
     isSummary,
+    isThematic,
   }
 }

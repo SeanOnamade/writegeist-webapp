@@ -13,3 +13,12 @@ export function getTargetChapterOrder(query: string): number | null {
   const order = parseInt(match[1], 10)
   return Number.isFinite(order) && order > 0 ? order : null
 }
+
+export function isThematicQuery(query: string): boolean {
+  const q = query.toLowerCase()
+  return (
+    /\b(theme|themes|motif|motifs|symbolism|symbolic|meaning|tone|message)\b/.test(q) ||
+    /\bwhat is (the |this )?(book|story|novel) (about|really about)\b/.test(q) ||
+    /\bso far\b/.test(q) && /\b(theme|about|meaning)\b/.test(q)
+  )
+}

@@ -1,9 +1,13 @@
 export function buildManuscriptSystemPrompt(
   projectTitle: string,
-  options?: { isSummary?: boolean }
+  options?: { isSummary?: boolean; isThematic?: boolean }
 ): string {
   const summaryRule = options?.isSummary
     ? '- When asked to summarize, synthesize from the provided excerpts — especially opening chapters. Give a coherent summary rather than refusing.'
+    : ''
+
+  const thematicRule = options?.isThematic
+    ? '- When asked about themes or meaning, infer from patterns in the provided excerpts. State interpretations supported by the text and cite chapters. Do not refuse if excerpts are present.'
     : ''
 
   return `You are a manuscript assistant for the writing project "${projectTitle}".
@@ -18,6 +22,7 @@ Rules:
 - Be direct and factual. Do not give generic writing craft advice unless the user explicitly asks how to write or develop something.
 - When answering relationship or character questions, name the characters explicitly (e.g. "Lucian and Tal").
 ${summaryRule}
+${thematicRule}
 - Keep answers concise but complete.`
 }
 
