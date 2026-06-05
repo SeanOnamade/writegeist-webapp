@@ -7,6 +7,7 @@ export interface ContextCitation {
   chapterTitle: string
   similarity: number
   excerpt: string
+  excerpts?: string[]
 }
 
 export interface BuildProjectContextResult {
@@ -16,6 +17,7 @@ export interface BuildProjectContextResult {
   indexed: boolean
   indexing: boolean
   hasContent: boolean
+  confidence: 'high' | 'low'
 }
 
 const MAX_CONTEXT_LENGTH = 12000
@@ -73,8 +75,32 @@ function buildFallbackContext(
   return context + '\n'
 }
 
+function dedupeCitationsByChapter(citations: ContextCitation[]): ContextCitation[] {
+  const groups = new Map<string, ContextCitation>()
+
+  for (const citation of citations) {
+    const key = citation.chapterId || citation.chapterTitle
+    const existing = groups.get(key)
+
+    if (!existing) {
+      groups.set(key, {
+        ...citation,
+        excerpts: citation.excerpt ? [citation.excerpt] : [],
+      })
+      continue
+    }
+
+    existing.similarity = Math.max(existing.similarity, citation.similarity)
+    if (citation.excerpt && !existing.excerpts?.includes(citation.excerpt)) {
+      existing.excerpts = [...(existing.excerpts || []), citation.excerpt]
+    }
+  }
+
+  return [...groups.values()].sort((a, b) => b.similarity - a.similarity)
+}
+
 export async function buildProjectContext(
-  query: string,
+  searchQuery: string,
   projectId: string,
   userId: string
 ): Promise<BuildProjectContextResult> {
@@ -134,8 +160,8 @@ export async function buildProjectContext(
   const citations: ContextCitation[] = []
   let searchResults: EmbeddingSearchResult[] = []
 
-  if (query.trim() && indexed) {
-    searchResults = await searchProjectEmbeddings(query, projectId, userId, 5)
+  if (searchQuery.trim() && indexed) {
+    searchResults = await searchProjectEmbeddings(searchQuery, projectId, userId, 8)
   }
 
   if (searchResults.length > 0) {
@@ -178,12 +204,19 @@ export async function buildProjectContext(
     context += buildFallbackContext(chaptersWithContent)
   }
 
+  const displayCitations = dedupeCitationsByChapter(citations)
+  const maxSimilarity = displayCitations.length > 0
+    ? Math.max(...displayCitations.map((c) => c.similarity))
+    : 0
+  const confidence: 'high' | 'low' = maxSimilarity >= 0.4 ? 'high' : 'low'
+
   return {
     context: truncateContext(context),
     projectTitle,
-    citations,
+    citations: displayCitations,
     indexed,
     indexing,
     hasContent: chaptersWithContent.length > 0 || indexed,
+    confidence,
   }
 }

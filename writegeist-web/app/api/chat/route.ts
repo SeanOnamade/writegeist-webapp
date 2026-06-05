@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getOpenAIApiKey } from '@/lib/api/openai-key'
 import { buildProjectContext } from '@/lib/chat/buildProjectContext'
+import { buildSearchQuery } from '@/lib/chat/buildSearchQuery'
 import { buildManuscriptSystemPrompt, buildContextInjection } from '@/lib/chat/prompts'
 
 export async function POST(request: NextRequest) {
@@ -20,20 +21,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const userQuery = messages[messages.length - 1]?.content || ''
+    const searchQuery = buildSearchQuery(messages)
     let projectContext = ''
     let citations: Array<{ chapterId: string | null; chapterTitle: string; similarity: number; excerpt: string }> = []
     let indexed = false
     let hasContent = false
     let projectTitle = 'your project'
+    let confidence: 'high' | 'low' = 'high'
 
     if (projectId) {
-      const contextResult = await buildProjectContext(userQuery, projectId, userId)
+      const contextResult = await buildProjectContext(searchQuery, projectId, userId)
       projectContext = contextResult.context
       citations = contextResult.citations
       indexed = contextResult.indexed
       hasContent = contextResult.hasContent
       projectTitle = contextResult.projectTitle
+      confidence = contextResult.confidence
     }
 
     const systemContent = projectContext
@@ -79,6 +82,7 @@ ${buildContextInjection(projectContext)}`
       indexed,
       hasContent,
       projectTitle,
+      confidence,
     })
   } catch (error) {
     console.error('Chat API error:', error)

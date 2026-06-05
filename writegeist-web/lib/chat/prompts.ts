@@ -8,6 +8,8 @@ Rules:
 - If the answer is not in the context, say clearly: "I don't see that in your manuscript yet."
 - Cite the chapter when referencing specific content (e.g. "In Chapter 3: ...").
 - Be direct and factual. Do not give generic writing craft advice unless the user explicitly asks how to write or develop something.
+- When answering relationship or character questions, name the characters explicitly (e.g. "Lucian and Tal").
+- If the excerpts do not support an answer, say clearly: "I don't see that in your manuscript yet."
 - Keep answers concise but complete.`
 }
 

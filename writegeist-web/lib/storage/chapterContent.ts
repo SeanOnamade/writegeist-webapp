@@ -4,6 +4,18 @@ import type { Chapter } from '@/types/database'
 export class ChapterContentStorage {
   private supabase = createClient()
 
+  private triggerChapterEmbeddings(chapterId: string, content: string, projectId?: string): void {
+    if (!projectId) return
+
+    fetch('/api/embeddings/generate-chunked', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chapterId, content, projectId }),
+    }).catch(() => {
+      // Non-blocking: saves succeed even if embeddings fail
+    })
+  }
+
   /**
    * Save chapter content to storage and update database
    */
@@ -65,26 +77,7 @@ export class ChapterContentStorage {
           throw new Error(`Failed to save content: ${updateError.message}`)
         }
 
-        // Still try to generate embeddings even if storage fails
-        try {
-          console.log('Triggering chunked embedding generation (fallback mode)...')
-          const embeddingResponse = await fetch('/api/embeddings/generate-chunked', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chapterId: chapterId,
-              content: content,
-              projectId: metadata.projectId || 'ededb541-8ea5-4304-b830-ca628e30b47e'
-            })
-          })
-          
-          if (embeddingResponse.ok) {
-            const embeddingResult = await embeddingResponse.json()
-            console.log(`Chunked embeddings generated successfully (fallback): ${embeddingResult.successfulEmbeddings}/${embeddingResult.totalChunks} chunks`)
-          }
-        } catch (embeddingError) {
-          console.log('Embedding generation also failed:', embeddingError)
-        }
+        this.triggerChapterEmbeddings(chapterId, content, metadata.projectId)
 
         const fallbackChapter = chapterData?.[0]
         if (fallbackChapter) {
@@ -95,26 +88,7 @@ export class ChapterContentStorage {
 
       console.log('Content uploaded to storage:', uploadData.path)
       
-      // Generate chunked embeddings immediately after successful upload
-      try {
-        console.log('Triggering chunked embedding generation...')
-        const embeddingResponse = await fetch('/api/embeddings/generate-chunked', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chapterId: chapterId,
-            content: content,
-            projectId: metadata.projectId || 'ededb541-8ea5-4304-b830-ca628e30b47e' // Default to Limbo project
-          })
-        })
-        
-        if (!embeddingResponse.ok) {
-          console.log('Chunked embedding generation failed, but content saved')
-        }
-      } catch (embeddingError) {
-        console.log('Chunked embedding generation error:', embeddingError)
-        // Don't fail the save if embeddings fail
-      }
+      this.triggerChapterEmbeddings(chapterId, content, metadata.projectId)
 
       // Update chapter metadata and file path
       console.log('Updating chapter with word count:', metadata.wordCount)

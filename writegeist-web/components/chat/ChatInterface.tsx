@@ -1,20 +1,21 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { ChatSession, ChatMessage, Project, Json } from '@/types/database'
 import { chatAPI } from '@/lib/api/chat'
 import { projectsAPI } from '@/lib/api/projects'
 import { titleFromFirstMessage } from '@/lib/chat/prompts'
-import { Pencil } from 'lucide-react'
+import { groupCitations, type ContextCitation } from '@/lib/chat/groupCitations'
+import { Pencil, ChevronDown, ChevronRight } from 'lucide-react'
 
-interface ContextCitation {
-  chapterId: string | null
-  chapterTitle: string
-  similarity: number
-  excerpt: string
-}
+const SUGGESTED_PROMPTS = [
+  'Who is Kane?',
+  'Summarize the opening',
+  'What happens in chapter 2?',
+]
 
 interface ChatInterfaceProps {
   sessionId?: string
@@ -41,6 +42,7 @@ export function ChatInterface({
   const [newTitle, setNewTitle] = useState('')
   const [currentUserId, setCurrentUserId] = useState<string>('')
   const [sendError, setSendError] = useState<string | null>(null)
+  const [expandedCitations, setExpandedCitations] = useState<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const sendingRef = useRef(false)
   const skipLoadSessionRef = useRef(false)
@@ -189,7 +191,7 @@ export function ChatInterface({
           currentSession.id,
           aiResult.message,
           'assistant',
-          { citations: aiResult.citations } as unknown as Json
+          { citations: aiResult.citations, confidence: aiResult.confidence } as unknown as Json
         )
 
         if (aiMsg) {
@@ -221,7 +223,7 @@ export function ChatInterface({
     userMessage: string,
     currentSession: ChatSession,
     conversationMessages: ChatMessage[]
-  ): Promise<{ message: string; citations: ContextCitation[] }> => {
+  ): Promise<{ message: string; citations: ContextCitation[]; confidence: 'high' | 'low' }> => {
     const contextMessages = conversationMessages
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .slice(-10)
@@ -251,6 +253,7 @@ export function ChatInterface({
           message:
             'OpenAI API key not configured. Please add your API key in Settings to enable manuscript Q&A.',
           citations: [],
+          confidence: 'low',
         }
       }
       throw new Error(`API request failed: ${response.status}`)
@@ -271,7 +274,25 @@ export function ChatInterface({
     return {
       message: data.message || "I couldn't find an answer in your manuscript.",
       citations: data.citations || [],
+      confidence: data.confidence === 'low' ? 'low' : 'high',
     }
+  }
+
+  const toggleCitationExpand = (key: string) => {
+    setExpandedCitations((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
+  const getMessageConfidence = (message: ChatMessage): 'high' | 'low' | null => {
+    const meta = message.metadata as { confidence?: 'high' | 'low' } | null
+    return meta?.confidence ?? null
   }
 
   const scrollToBottom = () => {
@@ -386,12 +407,26 @@ export function ChatInterface({
               Ask questions about your story — characters, plot, events — and get answers from your
               actual chapters.
             </p>
-            <p className="text-sm text-muted-foreground">Try: &quot;Who is Kane?&quot; or &quot;What happens in chapter 2?&quot;</p>
+            <div className="flex flex-wrap justify-center gap-2 mt-4">
+              {SUGGESTED_PROMPTS.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => setInput(prompt)}
+                  className="text-sm px-3 py-1.5 rounded-full border border-input bg-background hover:bg-accent transition-colors"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <>
             {messages.map((message) => {
               const citations = getCitations(message)
+              const groupedCitations = groupCitations(citations)
+              const confidence = getMessageConfidence(message)
+              const projectIdForLinks = selectedProjectId || session?.project_id || ''
               return (
                 <div
                   key={message.id}
@@ -403,14 +438,72 @@ export function ChatInterface({
                     }`}
                   >
                     <div className="whitespace-pre-wrap">{message.content}</div>
-                    {citations.length > 0 && (
+                    {message.role === 'assistant' && confidence === 'low' && (
+                      <p className="mt-2 text-xs text-muted-foreground italic">
+                        Low manuscript match — answer may be incomplete.
+                      </p>
+                    )}
+                    {groupedCitations.length > 0 && (
                       <div className="mt-2 pt-2 border-t border-border/50 text-xs opacity-80">
                         <div className="font-medium mb-1">Sources:</div>
-                        {citations.map((c, i) => (
-                          <div key={i}>
-                            {c.chapterTitle} ({Math.round(c.similarity * 100)}% match)
-                          </div>
-                        ))}
+                        {groupedCitations.map((group) => {
+                          const key = group.chapterId || group.chapterTitle
+                          const isExpanded = expandedCitations.has(`${message.id}-${key}`)
+                          const excerptCount = group.excerpts.length
+                          return (
+                            <div key={key} className="mb-1">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {excerptCount > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleCitationExpand(`${message.id}-${key}`)}
+                                    className="text-muted-foreground hover:text-foreground"
+                                    aria-label={isExpanded ? 'Collapse excerpts' : 'Expand excerpts'}
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronDown className="h-3 w-3" />
+                                    ) : (
+                                      <ChevronRight className="h-3 w-3" />
+                                    )}
+                                  </button>
+                                )}
+                                {group.chapterId && projectIdForLinks ? (
+                                  <Link
+                                    href={`/project/${projectIdForLinks}/read?chapter=${group.chapterId}`}
+                                    className="underline hover:opacity-100"
+                                  >
+                                    {group.chapterTitle}
+                                  </Link>
+                                ) : (
+                                  <span>{group.chapterTitle}</span>
+                                )}
+                                <span>({Math.round(group.bestSimilarity * 100)}% match)</span>
+                                {excerptCount > 1 && (
+                                  <span className="text-muted-foreground">
+                                    · {excerptCount} excerpts
+                                  </span>
+                                )}
+                                {group.chapterId && (
+                                  <Link
+                                    href={`/chapters/${group.chapterId}`}
+                                    className="text-muted-foreground hover:text-foreground ml-1"
+                                  >
+                                    edit
+                                  </Link>
+                                )}
+                              </div>
+                              {isExpanded && excerptCount > 1 && (
+                                <ul className="mt-1 ml-4 space-y-0.5 text-muted-foreground">
+                                  {group.excerpts.map((excerpt, i) => (
+                                    <li key={i} className="truncate">
+                                      &ldquo;{excerpt}&rdquo;
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                     <div

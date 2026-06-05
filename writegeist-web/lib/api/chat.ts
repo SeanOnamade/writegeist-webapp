@@ -44,4 +44,12 @@ export const chatAPI = {
     const result = await chatOperations.updateSession(sessionId, { project_id: projectId })
     return !!result
   },
+
+  async countEmptySessions(): Promise<number> {
+    return await chatOperations.countEmptySessions()
+  },
+
+  async deleteEmptySessions(): Promise<number> {
+    return await chatOperations.deleteEmptySessions()
+  },
 }

@@ -22,6 +22,8 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [emptySessionCount, setEmptySessionCount] = useState(0)
+  const [clearingEmpty, setClearingEmpty] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -35,6 +37,8 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
       ])
       setSessions(sessionList)
       setProjects(projectList)
+      const emptyCount = await chatAPI.countEmptySessions()
+      setEmptySessionCount(emptyCount)
     } catch (error) {
       console.error('Error loading chat data:', error)
     } finally {
@@ -96,6 +100,35 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
     e.stopPropagation()
     setEditingSessionId(null)
     setEditingTitle('')
+  }
+
+  const handleClearEmptyChats = async () => {
+    if (emptySessionCount === 0) return
+
+    if (
+      !confirm(
+        `Delete ${emptySessionCount} empty "New Chat" session${emptySessionCount === 1 ? '' : 's'}? This cannot be undone.`
+      )
+    ) {
+      return
+    }
+
+    setClearingEmpty(true)
+    try {
+      const deleted = await chatAPI.deleteEmptySessions()
+      if (deleted > 0) {
+        const sessionList = await chatAPI.getSessions()
+        setSessions(sessionList)
+        setEmptySessionCount(0)
+        if (selectedSessionId && !sessionList.find((s) => s.id === selectedSessionId)) {
+          onNewChat()
+        }
+      }
+    } catch (error) {
+      console.error('Error clearing empty chats:', error)
+    } finally {
+      setClearingEmpty(false)
+    }
   }
 
   const getFilteredSessions = () => {
@@ -305,11 +338,22 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
       </div>
 
       {/* Footer Stats */}
-      <div className="p-4 border-t text-xs text-muted-foreground">
+      <div className="p-4 border-t text-xs text-muted-foreground space-y-2">
         <div className="flex justify-between">
           <span>{sessions.length} total chats</span>
           <span>{sessions.filter(s => s.project_id).length} project chats</span>
         </div>
+        {emptySessionCount > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleClearEmptyChats}
+            disabled={clearingEmpty}
+            className="w-full h-7 text-xs text-muted-foreground hover:text-destructive"
+          >
+            {clearingEmpty ? 'Clearing...' : `Clear ${emptySessionCount} empty chat${emptySessionCount === 1 ? '' : 's'}`}
+          </Button>
+        )}
       </div>
     </div>
   )

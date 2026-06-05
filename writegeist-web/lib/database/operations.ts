@@ -593,6 +593,59 @@ export const chatOperations = {
 
     return true
   },
+
+  async countEmptySessions(): Promise<number> {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return 0
+
+    const { data: sessions } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('title', 'New Chat')
+
+    if (!sessions || sessions.length === 0) return 0
+
+    let emptyCount = 0
+    for (const session of sessions) {
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id)
+
+      if ((count ?? 0) === 0) emptyCount++
+    }
+
+    return emptyCount
+  },
+
+  async deleteEmptySessions(): Promise<number> {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return 0
+
+    const { data: sessions } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('title', 'New Chat')
+
+    if (!sessions || sessions.length === 0) return 0
+
+    let deleted = 0
+    for (const session of sessions) {
+      const { count } = await supabase
+        .from('chat_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('session_id', session.id)
+
+      if ((count ?? 0) === 0) {
+        const success = await chatOperations.deleteSession(session.id)
+        if (success) deleted++
+      }
+    }
+
+    return deleted
+  },
 }
 
 // Search operations

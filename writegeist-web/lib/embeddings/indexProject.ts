@@ -2,11 +2,18 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getOpenAIApiKey } from '@/lib/api/openai-key'
 import { contentChunker } from '@/lib/embeddings/chunking'
 
+export const CHUNK_MAX_CHARS = 1200
+export const CHUNK_OVERLAP = 150
+
 export interface IndexProjectResult {
   indexed: boolean
   totalChapters: number
   chaptersWithContent: number
   totalChunks: number
+}
+
+export interface IndexChapterResult {
+  chunkCount: number
 }
 
 async function loadChapterContent(
@@ -26,6 +33,81 @@ async function loadChapterContent(
   }
 
   return content
+}
+
+export async function indexChapterEmbeddings(
+  chapterId: string,
+  projectId: string,
+  userId: string,
+  content: string,
+  chapterTitle = 'Untitled Chapter'
+): Promise<IndexChapterResult> {
+  const supabase = await createServiceRoleClient()
+  const { apiKey } = await getOpenAIApiKey(userId)
+
+  if (!apiKey || !content || content.length < 50) {
+    return { chunkCount: 0 }
+  }
+
+  await supabase
+    .from('document_embeddings')
+    .delete()
+    .eq('chapter_id', chapterId)
+    .eq('user_id', userId)
+
+  const chunks = contentChunker.chunk(content, {
+    maxChars: CHUNK_MAX_CHARS,
+    preserveContext: true,
+    overlapChars: CHUNK_OVERLAP,
+  })
+
+  let chunkCount = 0
+
+  for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+    const chunk = chunks[chunkIndex]
+
+    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: chunk.text,
+        encoding_format: 'float',
+      }),
+    })
+
+    if (!embeddingResponse.ok) continue
+
+    const embeddingData = await embeddingResponse.json()
+    const embedding = embeddingData.data[0].embedding
+
+    const { error: insertError } = await supabase.from('document_embeddings').insert({
+      content_text: chunk.text,
+      content_hash: Buffer.from(chunk.text).toString('base64').substring(0, 50),
+      embedding,
+      chapter_id: chapterId,
+      project_id: projectId,
+      user_id: userId,
+      content_type: 'chapter_chunk',
+      metadata: {
+        generated_at: new Date().toISOString(),
+        model: 'text-embedding-3-small',
+        chapter_title: chapterTitle,
+        chunk_index: chunk.index,
+        chunk_start: chunk.startChar,
+        chunk_end: chunk.endChar,
+        total_chunks: chunks.length,
+        source: 'chapter_save',
+      },
+    })
+
+    if (!insertError) chunkCount++
+  }
+
+  return { chunkCount }
 }
 
 export async function indexProjectEmbeddings(
@@ -60,55 +142,14 @@ export async function indexProjectEmbeddings(
     if (!content || content.length < 50) continue
 
     chaptersWithContent++
-    const chunks = contentChunker.chunk(content, {
-      maxChars: 1200,
-      preserveContext: true,
-      overlapChars: 150,
-    })
-
-    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
-      const chunk = chunks[chunkIndex]
-
-      const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'text-embedding-3-small',
-          input: chunk.text,
-          encoding_format: 'float',
-        }),
-      })
-
-      if (!embeddingResponse.ok) continue
-
-      const embeddingData = await embeddingResponse.json()
-      const embedding = embeddingData.data[0].embedding
-
-      const { error: insertError } = await supabase.from('document_embeddings').insert({
-        content_text: chunk.text,
-        content_hash: Buffer.from(chunk.text).toString('base64').substring(0, 50),
-        embedding,
-        chapter_id: chapter.id,
-        project_id: projectId,
-        user_id: userId,
-        content_type: 'chapter_chunk',
-        metadata: {
-          generated_at: new Date().toISOString(),
-          model: 'text-embedding-3-small',
-          chapter_title: chapter.title,
-          chunk_index: chunk.index,
-          chunk_start: chunk.startChar,
-          chunk_end: chunk.endChar,
-          total_chunks: chunks.length,
-          source: 'auto_index',
-        },
-      })
-
-      if (!insertError) totalChunks++
-    }
+    const result = await indexChapterEmbeddings(
+      chapter.id,
+      projectId,
+      userId,
+      content,
+      chapter.title
+    )
+    totalChunks += result.chunkCount
   }
 
   return {
