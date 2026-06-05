@@ -9,9 +9,81 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export interface UserPreferences {
+  openaiApiKey?: string
+  [key: string]: Json | undefined
+}
+
 export type Database = {
   public: {
     Tables: {
+      audio_generation_queue: {
+        Row: {
+          audio_id: string
+          chapter_id: string
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          max_retries: number
+          priority: number
+          retry_count: number
+          started_at: string | null
+          status: Database["public"]["Enums"]["queue_status"]
+          user_id: string
+        }
+        Insert: {
+          audio_id: string
+          chapter_id: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_retries?: number
+          priority?: number
+          retry_count?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["queue_status"]
+          user_id: string
+        }
+        Update: {
+          audio_id?: string
+          chapter_id?: string
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          max_retries?: number
+          priority?: number
+          retry_count?: number
+          started_at?: string | null
+          status?: Database["public"]["Enums"]["queue_status"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audio_generation_queue_audio_id_fkey"
+            columns: ["audio_id"]
+            isOneToOne: true
+            referencedRelation: "chapter_audio"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audio_generation_queue_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audio_generation_queue_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audio_files: {
         Row: {
           chapter_id: string
@@ -65,6 +137,82 @@ export type Database = {
           },
           {
             foreignKeyName: "audio_files_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chapter_audio: {
+        Row: {
+          audio_url: string | null
+          chapter_id: string
+          content_hash: string | null
+          created_at: string
+          duration: number
+          error_message: string | null
+          file_path: string | null
+          file_size: number
+          id: string
+          project_id: string
+          status: Database["public"]["Enums"]["chapter_audio_status"]
+          tts_model: string
+          updated_at: string
+          user_id: string
+          voice_model: string
+        }
+        Insert: {
+          audio_url?: string | null
+          chapter_id: string
+          content_hash?: string | null
+          created_at?: string
+          duration?: number
+          error_message?: string | null
+          file_path?: string | null
+          file_size?: number
+          id?: string
+          project_id: string
+          status?: Database["public"]["Enums"]["chapter_audio_status"]
+          tts_model?: string
+          updated_at?: string
+          user_id: string
+          voice_model?: string
+        }
+        Update: {
+          audio_url?: string | null
+          chapter_id?: string
+          content_hash?: string | null
+          created_at?: string
+          duration?: number
+          error_message?: string | null
+          file_path?: string | null
+          file_size?: number
+          id?: string
+          project_id?: string
+          status?: Database["public"]["Enums"]["chapter_audio_status"]
+          tts_model?: string
+          updated_at?: string
+          user_id?: string
+          voice_model?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapter_audio_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_audio_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_audio_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -229,7 +377,7 @@ export type Database = {
           content_text: string
           content_type: string
           created_at: string
-          embedding: string | null
+          embedding: number[] | null
           id: string
           metadata: Json
           project_id: string | null
@@ -242,7 +390,7 @@ export type Database = {
           content_text: string
           content_type: string
           created_at?: string
-          embedding?: string | null
+          embedding?: number[] | null
           id?: string
           metadata?: Json
           project_id?: string | null
@@ -255,7 +403,7 @@ export type Database = {
           content_text?: string
           content_type?: string
           created_at?: string
-          embedding?: string | null
+          embedding?: number[] | null
           id?: string
           metadata?: Json
           project_id?: string | null
@@ -495,7 +643,7 @@ export type Database = {
     Functions: {
       search_documents: {
         Args: {
-          query_embedding: string
+          query_embedding: number[]
           match_threshold: number
           match_count: number
           filter_user_id?: string
@@ -509,12 +657,31 @@ export type Database = {
           metadata: Json
         }[]
       }
+      search_embeddings: {
+        Args: {
+          query_embedding: number[]
+          match_threshold: number
+          match_count: number
+          project_filter?: string | null
+        }
+        Returns: {
+          id: string
+          content_text: string
+          content_type: string
+          similarity: number
+          metadata: Json
+          chapter_id: string | null
+          project_id: string | null
+        }[]
+      }
     }
     Enums: {
       audio_status: "pending" | "processing" | "completed" | "failed"
+      chapter_audio_status: "pending" | "processing" | "completed" | "error" | "outdated"
       chapter_status: "draft" | "in_progress" | "completed" | "published"
       idea_status: "new" | "in_progress" | "used" | "archived"
       project_status: "active" | "archived" | "draft"
+      queue_status: "queued" | "processing" | "completed" | "failed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -527,7 +694,10 @@ export type User = Database['public']['Tables']['users']['Row']
 export type Project = Database['public']['Tables']['projects']['Row']
 export type Chapter = Database['public']['Tables']['chapters']['Row']
 export type Idea = Database['public']['Tables']['ideas']['Row']
+/** @deprecated Use ChapterAudio — legacy audio_files table */
 export type AudioFile = Database['public']['Tables']['audio_files']['Row']
+export type ChapterAudio = Database['public']['Tables']['chapter_audio']['Row']
+export type AudioGenerationQueue = Database['public']['Tables']['audio_generation_queue']['Row']
 export type ChatSession = Database['public']['Tables']['chat_sessions']['Row']
 export type ChatMessage = Database['public']['Tables']['chat_messages']['Row']
 export type DocumentEmbedding = Database['public']['Tables']['document_embeddings']['Row']
@@ -538,7 +708,9 @@ export type UserInsert = Database['public']['Tables']['users']['Insert']
 export type ProjectInsert = Database['public']['Tables']['projects']['Insert']
 export type ChapterInsert = Database['public']['Tables']['chapters']['Insert']
 export type IdeaInsert = Database['public']['Tables']['ideas']['Insert']
+/** @deprecated Use ChapterAudioInsert */
 export type AudioFileInsert = Database['public']['Tables']['audio_files']['Insert']
+export type ChapterAudioInsert = Database['public']['Tables']['chapter_audio']['Insert']
 export type ChatSessionInsert = Database['public']['Tables']['chat_sessions']['Insert']
 export type ChatMessageInsert = Database['public']['Tables']['chat_messages']['Insert']
 
@@ -547,12 +719,16 @@ export type UserUpdate = Database['public']['Tables']['users']['Update']
 export type ProjectUpdate = Database['public']['Tables']['projects']['Update']
 export type ChapterUpdate = Database['public']['Tables']['chapters']['Update']
 export type IdeaUpdate = Database['public']['Tables']['ideas']['Update']
+/** @deprecated Use ChapterAudioUpdate */
 export type AudioFileUpdate = Database['public']['Tables']['audio_files']['Update']
+export type ChapterAudioUpdate = Database['public']['Tables']['chapter_audio']['Update']
 export type ChatSessionUpdate = Database['public']['Tables']['chat_sessions']['Update']
 
 // Enum types
 export type ProjectStatus = Database['public']['Enums']['project_status']
 export type ChapterStatus = Database['public']['Enums']['chapter_status']
 export type AudioStatus = Database['public']['Enums']['audio_status']
+export type ChapterAudioStatus = Database['public']['Enums']['chapter_audio_status']
+export type QueueStatus = Database['public']['Enums']['queue_status']
 export type IdeaStatus = Database['public']['Enums']['idea_status']
 

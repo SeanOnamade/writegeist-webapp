@@ -457,15 +457,14 @@ export const electronAPI = {
     }
   },
 
-  // Audio operations (TODO: Implement with audio_files table and Edge Functions)
+  // Audio operations (chapter_audio table)
   generateAudio: async (chapterId: string): Promise<Record<string, unknown>> => {
     try {
       const audioFile = await audioOperations.create({
         chapter_id: chapterId,
-        file_name: `chapter_${chapterId}_audio.mp3`,
+        project_id: '',
         file_path: `audio/${chapterId}/audio.mp3`,
-        status: 'pending',
-        generation_settings: {}
+        status: 'processing',
       })
       return { success: !!audioFile, status: 'processing' }
     } catch (error) {
@@ -479,10 +478,10 @@ export const electronAPI = {
       const audioFiles = await audioOperations.getByChapterId(chapterId)
       const latestAudio = audioFiles[0]
       if (latestAudio) {
-        return { 
-          status: latestAudio.status, 
-          url: latestAudio.file_path,
-          duration: latestAudio.duration 
+        return {
+          status: latestAudio.status,
+          url: latestAudio.audio_url || latestAudio.file_path,
+          duration: latestAudio.duration,
         }
       }
       return { status: 'not_found' }
@@ -498,10 +497,10 @@ export const electronAPI = {
       return audioFiles.map(file => ({
         id: file.id,
         chapterId: file.chapter_id,
-        fileName: file.file_name,
         status: file.status,
         duration: file.duration,
-        url: file.file_path
+        url: file.audio_url || file.file_path,
+        voiceModel: file.voice_model,
       }))
     } catch (error) {
       console.error('Error getting all audio:', error)

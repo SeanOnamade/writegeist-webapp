@@ -13,6 +13,8 @@ interface AudioInfo {
   id: string
   status: 'pending' | 'processing' | 'completed' | 'error' | 'outdated'
   audio_url?: string
+  playUrl?: string
+  signedUrl?: string
   duration?: number
   file_size?: number
   voice_model?: string
@@ -26,7 +28,7 @@ interface AudioInfo {
 interface ChapterWithAudio {
   id: string
   title: string
-  content: string
+  content?: string
   content_preview: string
   project_id: string
   order_index: number

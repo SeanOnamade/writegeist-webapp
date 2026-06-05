@@ -1,30 +1,35 @@
-import type { AudioFile } from '@/types/database'
+import type { ChapterAudio } from '@/types/database'
 import { audioOperations } from '@/lib/database/operations'
 import { api } from './client'
 
 export const audioAPI = {
-  async getAll(): Promise<AudioFile[]> {
+  async getAll(): Promise<ChapterAudio[]> {
     return await audioOperations.getAll()
   },
 
-  async getByChapter(chapterId: string): Promise<AudioFile[]> {
+  async getByChapter(chapterId: string): Promise<ChapterAudio[]> {
     return await audioOperations.getByChapterId(chapterId)
   },
 
-  async generate(chapterId: string, settings?: Record<string, unknown>): Promise<AudioFile | null> {
+  async generate(chapterId: string, settings?: Record<string, unknown>): Promise<ChapterAudio | null> {
     return await audioOperations.create({
       chapter_id: chapterId,
-      file_name: `chapter_${chapterId}_${Date.now()}.mp3`,
+      project_id: settings?.projectId as string | undefined ?? '',
       file_path: `audio/${chapterId}/${Date.now()}.mp3`,
       status: 'pending',
-      generation_settings: (settings || {}) as any
+      voice_model: (settings?.voice as string) || 'alloy',
+      tts_model: (settings?.model as string) || 'tts-1-hd',
     })
   },
 
-  async updateStatus(id: string, status: 'pending' | 'processing' | 'completed' | 'failed', errorMessage?: string): Promise<AudioFile | null> {
-    return await audioOperations.update(id, { 
-      status, 
-      error_message: errorMessage || null 
+  async updateStatus(
+    id: string,
+    status: 'pending' | 'processing' | 'completed' | 'error' | 'outdated',
+    errorMessage?: string
+  ): Promise<ChapterAudio | null> {
+    return await audioOperations.update(id, {
+      status,
+      error_message: errorMessage || null,
     })
   },
 
@@ -32,22 +37,20 @@ export const audioAPI = {
     return await audioOperations.delete(id)
   },
 
-  async uploadAudioFile(file: File, chapterId: string): Promise<{ success: boolean; audioFile?: AudioFile }> {
+  async uploadAudioFile(file: File, chapterId: string): Promise<{ success: boolean; audioFile?: ChapterAudio }> {
     try {
-      // Upload file to storage
       const uploadResult = await api.uploadFile(file, 'audio-files', `chapters/${chapterId}/${file.name}`)
-      
+
       if (!uploadResult.success || !uploadResult.data) {
         return { success: false }
       }
 
-      // Create audio file record
       const audioFile = await audioOperations.create({
         chapter_id: chapterId,
-        file_name: file.name,
+        project_id: '',
         file_path: uploadResult.data,
         file_size: file.size,
-        status: 'completed'
+        status: 'completed',
       })
 
       return { success: !!audioFile, audioFile: audioFile || undefined }
@@ -57,26 +60,22 @@ export const audioAPI = {
     }
   },
 
-  async getAudioUrl(audioFile: AudioFile): Promise<string | null> {
+  async getAudioUrl(audioFile: ChapterAudio): Promise<string | null> {
     try {
+      if (!audioFile.file_path) return audioFile.audio_url
       const result = await api.getFileUrl('audio-files', audioFile.file_path)
-      return result.data || null
+      return result.data || audioFile.audio_url || null
     } catch (error) {
       console.error('Error getting audio URL:', error)
       return null
     }
   },
 
-  /**
-   * Delete audio for a chapter
-   * @param chapterId - The chapter ID to delete audio for
-   * @returns Success status and deleted file size
-   */
   async deleteByChapter(chapterId: string): Promise<{ success: boolean; deleted_file_size?: number; error?: string }> {
     try {
       const response = await fetch(`/api/audio/${chapterId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 'Content-Type': 'application/json' },
       })
 
       if (!response.ok) {
@@ -88,10 +87,10 @@ export const audioAPI = {
       return { success: true, deleted_file_size: data.deleted_file_size }
     } catch (error) {
       console.error('Error deleting audio:', error)
-      return { 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Failed to delete audio' 
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to delete audio',
       }
     }
-  }
+  },
 }

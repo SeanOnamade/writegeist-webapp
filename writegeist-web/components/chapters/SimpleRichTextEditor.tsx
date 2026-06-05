@@ -91,7 +91,7 @@ export function SimpleRichTextEditor({
     // Handle lists - convert to simple hyphen format for storage
     result = result.replace(/<ul[^>]*>(.*?)<\/ul>/gis, (match, content) => {
       const items = content.match(/<li[^>]*>(.*?)<\/li>/gi) || []
-      return items.map(item => {
+      return items.map((item: string) => {
         const text = item.replace(/<li[^>]*>(.*?)<\/li>/i, '$1').trim()
         return `- ${text}` // Convert to hyphen lists
       }).join('\n') + '\n\n'
@@ -186,7 +186,7 @@ export function SimpleRichTextEditor({
       document.execCommand('insertHTML', false, richText)
     } else if (plainText) {
       // Process plain text - DON'T convert asterisks to formatting!
-      let content = plainText
+      const content = plainText
         // Handle line breaks properly but keep asterisks as literal text
         .replace(/\n\s*\n/g, '</p><p>') // Double newlines = new paragraphs
         .replace(/\n/g, '<br>') // Single newlines = line breaks

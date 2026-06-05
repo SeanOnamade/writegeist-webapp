@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getApiKey } from '@/lib/crypto'
+import type { UserPreferences } from '@/types/database'
 import OpenAI from 'openai'
 import { parseBuffer } from 'music-metadata'
 
@@ -29,9 +30,9 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single()
       
-      if (userData?.preferences?.openaiApiKey) {
-        // Decrypt the stored API key
-        apiKey = getApiKey(userData.preferences.openaiApiKey)
+      const preferences = userData?.preferences as UserPreferences | null
+      if (preferences?.openaiApiKey) {
+        apiKey = getApiKey(preferences.openaiApiKey)
         console.log('✅ Using OpenAI API key from user settings (decrypted)')
       } else {
         console.log('No user API key found, using environment variables')
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest) {
     console.log('Chapter content length:', chapterContent.length)
 
     // Clean text for TTS
-    let cleanedText = cleanTextForTTS(chapterContent)
+    const cleanedText = cleanTextForTTS(chapterContent)
     console.log('Cleaned text length:', cleanedText.length)
 
     // OpenAI TTS has a hard limit of 4096 characters - use chunking for long content

@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/client'
+import type { Chapter } from '@/types/database'
 
 export class ChapterContentStorage {
   private supabase = createClient()
@@ -16,7 +17,7 @@ export class ChapterContentStorage {
       orderIndex?: number
       projectId?: string
     } = {}
-  ) {
+  ): Promise<Chapter | null> {
     try {
       console.log('Saving chapter content via storage...')
       console.log('Chapter ID:', chapterId)
@@ -85,11 +86,11 @@ export class ChapterContentStorage {
           console.log('Embedding generation also failed:', embeddingError)
         }
 
-        return {
-          success: true,
-          data: chapterData?.[0],
-          storage_method: 'database_fallback'
+        const fallbackChapter = chapterData?.[0]
+        if (fallbackChapter) {
+          fallbackChapter.content = content
         }
+        return fallbackChapter || null
       }
 
       console.log('Content uploaded to storage:', uploadData.path)

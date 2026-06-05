@@ -18,6 +18,12 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 OPENAI_API_KEY=your_openai_api_key
 ```
 
+### Encryption (required in production)
+```
+ENCRYPTION_KEY=your_random_32_char_secret
+```
+Used by `lib/crypto.ts` to encrypt user-stored OpenAI API keys. **Must** be set in production — the app falls back to a known default key if missing, which is insecure.
+
 ### Backend API Configuration
 ```
 BACKEND_API_URL=your_railway_fastapi_url

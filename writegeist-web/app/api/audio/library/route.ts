@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
       // Check if audio is outdated (compare content hashes)
       // Note: We skip this check to reduce egress - content is not fetched for library view
       // Outdated status can be checked when generating new audio
-      let isOutdated = false
+      const isOutdated = false
       // Removed outdated check here to reduce egress - content not available in library view
       
       // Don't send full content - only preview to reduce egress

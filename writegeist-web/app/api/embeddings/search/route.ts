@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Try with no project filter first to see if embeddings exist at all
-    const { data: allResults } = await (supabase as any)
+    const { data: allResults } = await supabase
       .rpc('search_embeddings', {
         query_embedding: queryEmbedding,
         match_threshold: 0.1,
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Search without project filter:', allResults?.length || 0)
 
-    const { data: results, error } = await (supabase as any)
+    const { data: results, error } = await supabase
       .rpc('search_embeddings', {
         query_embedding: queryEmbedding,
         match_threshold: 0.1, // Much lower threshold to catch more results
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
       console.log('Vector search failed - trying comprehensive fallback')
       
       // Try multiple search strategies
-      let fallbackResults = []
+      const fallbackResults = []
       
       // Strategy 1: Search for key terms in the query
       const keyTerms = query.toLowerCase()

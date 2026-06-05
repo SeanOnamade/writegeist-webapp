@@ -12,9 +12,9 @@ import type {
   Idea, 
   IdeaInsert, 
   IdeaUpdate,
-  AudioFile,
-  AudioFileInsert,
-  AudioFileUpdate,
+  ChapterAudio,
+  ChapterAudioInsert,
+  ChapterAudioUpdate,
   ChatSession,
   ChatSessionInsert,
   ChatMessage,
@@ -396,65 +396,76 @@ export const ideaOperations = {
   }
 }
 
-// Audio operations
+// Audio operations (chapter_audio table)
 export const audioOperations = {
-  async getByChapterId(chapterId: string): Promise<AudioFile[]> {
+  async getByChapterId(chapterId: string): Promise<ChapterAudio[]> {
     const { data, error } = await supabase
-      .from('audio_files')
+      .from('chapter_audio')
       .select('*')
       .eq('chapter_id', chapterId)
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching audio files:', error)
+      console.error('Error fetching chapter audio:', error)
       return []
     }
 
     return data || []
   },
 
-  async getAll(): Promise<AudioFile[]> {
+  async getAll(): Promise<ChapterAudio[]> {
     const { data, error } = await supabase
-      .from('audio_files')
+      .from('chapter_audio')
       .select('*')
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('Error fetching all audio files:', error)
+      console.error('Error fetching all chapter audio:', error)
       return []
     }
 
     return data || []
   },
 
-  async create(audioFile: Omit<AudioFileInsert, 'user_id'>): Promise<AudioFile | null> {
+  async create(audio: Omit<ChapterAudioInsert, 'user_id'>): Promise<ChapterAudio | null> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
 
+    let projectId = audio.project_id
+    if (!projectId) {
+      const { data: chapter } = await supabase
+        .from('chapters')
+        .select('project_id')
+        .eq('id', audio.chapter_id)
+        .single()
+      if (!chapter) return null
+      projectId = chapter.project_id
+    }
+
     const { data, error } = await supabase
-      .from('audio_files')
-      .insert({ ...audioFile, user_id: user.id })
+      .from('chapter_audio')
+      .insert({ ...audio, project_id: projectId, user_id: user.id })
       .select()
       .single()
 
     if (error) {
-      console.error('Error creating audio file:', error)
+      console.error('Error creating chapter audio:', error)
       return null
     }
 
     return data
   },
 
-  async update(id: string, updates: AudioFileUpdate): Promise<AudioFile | null> {
+  async update(id: string, updates: ChapterAudioUpdate): Promise<ChapterAudio | null> {
     const { data, error } = await supabase
-      .from('audio_files')
+      .from('chapter_audio')
       .update(updates)
       .eq('id', id)
       .select()
       .single()
 
     if (error) {
-      console.error('Error updating audio file:', error)
+      console.error('Error updating chapter audio:', error)
       return null
     }
 
@@ -463,12 +474,12 @@ export const audioOperations = {
 
   async delete(id: string): Promise<boolean> {
     const { error } = await supabase
-      .from('audio_files')
+      .from('chapter_audio')
       .delete()
       .eq('id', id)
 
     if (error) {
-      console.error('Error deleting audio file:', error)
+      console.error('Error deleting chapter audio:', error)
       return false
     }
 

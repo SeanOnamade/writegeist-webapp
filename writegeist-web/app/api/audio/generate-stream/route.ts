@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { getApiKey } from '@/lib/crypto'
+import type { UserPreferences } from '@/types/database'
 import OpenAI from 'openai'
 import { parseBuffer } from 'music-metadata'
+import crypto from 'crypto'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,9 +31,9 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single()
       
-      if (userData?.preferences?.openaiApiKey) {
-        // Decrypt the stored API key
-        apiKey = getApiKey(userData.preferences.openaiApiKey)
+      const preferences = userData?.preferences as UserPreferences | null
+      if (preferences?.openaiApiKey) {
+        apiKey = getApiKey(preferences.openaiApiKey)
         console.log('✅ Using OpenAI API key from user settings (decrypted)')
       } else {
         console.log('No user API key found, using environment variables')
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
           sendEvent('progress', { step: 'processing_text', message: 'Processing chapter text...' })
 
           // Clean text for TTS
-          let cleanedText = cleanTextForTTS(chapterContent)
+          const cleanedText = cleanTextForTTS(chapterContent)
           console.log('Cleaned text length:', cleanedText.length)
 
           if (cleanedText.length > 4000) {
@@ -306,8 +308,6 @@ async function saveAudioToDatabase(
   audioBuffer: Buffer, duration: number, voice: string, 
   model: string, content: string, supabase: any
 ) {
-  // Create content hash for change detection
-  const crypto = require('crypto')
   const contentHash = crypto.createHash('md5').update(content).digest('hex')
   
   // Generate unique file path

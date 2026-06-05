@@ -73,10 +73,11 @@ export function IdeasSearchModal({ isOpen, onClose, projectId }: IdeasSearchModa
     // Apply sorting
     filtered.sort((a, b) => {
       switch (sort) {
-        case 'title':
+        case 'title': {
           const titleA = a.title.toLowerCase().trim()
           const titleB = b.title.toLowerCase().trim()
           return titleA.localeCompare(titleB)
+        }
         case 'created':
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         case 'updated':
