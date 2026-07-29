@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { getOpenAIApiKey } from '@/lib/api/openai-key'
+import { getOpenAIApiKey } from '@/lib/api/provider-keys'
+import { loadChapterRowContent } from '@/lib/data/chapters'
 import { contentChunker } from '@/lib/embeddings/chunking'
 
 export const CHUNK_MAX_CHARS = 1200
@@ -14,25 +15,6 @@ export interface IndexProjectResult {
 
 export interface IndexChapterResult {
   chunkCount: number
-}
-
-async function loadChapterContent(
-  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
-  chapter: { content: string; content_file_path: string | null }
-): Promise<string> {
-  let content = chapter.content || ''
-
-  if (!content && chapter.content_file_path) {
-    const { data: storageData, error } = await supabase.storage
-      .from('chapter-content')
-      .download(chapter.content_file_path)
-
-    if (!error && storageData) {
-      content = await storageData.text()
-    }
-  }
-
-  return content
 }
 
 export async function indexChapterEmbeddings(
@@ -138,7 +120,7 @@ export async function indexProjectEmbeddings(
   let chaptersWithContent = 0
 
   for (const chapter of chapters) {
-    const content = await loadChapterContent(supabase, chapter)
+    const content = await loadChapterRowContent(supabase, chapter)
     if (!content || content.length < 50) continue
 
     chaptersWithContent++

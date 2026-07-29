@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { requireUser } from '@/lib/supabase/server'
+import { jsonError } from '@/lib/api/http'
 
 /**
- * DELETE /api/audio/[chapterId]
- * Delete audio for a specific chapter
+ * DELETE /api/audio/[chapterId] — remove a chapter's audio file and record.
  */
 export async function DELETE(
   request: NextRequest,
@@ -11,77 +11,41 @@ export async function DELETE(
 ) {
   try {
     const { chapterId } = await params
-    
     if (!chapterId) {
-      return NextResponse.json(
-        { error: 'Chapter ID is required' },
-        { status: 400 }
-      )
-    }
-    const supabase = await createClient()
-    
-    // Get the current user
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'User not authenticated' },
-        { status: 401 }
-      )
+      return jsonError('Chapter ID is required', 400)
     }
 
-    console.log('Deleting audio for chapter:', chapterId)
+    const { supabase, user } = await requireUser()
+    if (!user) {
+      return jsonError('Not authenticated', 401)
+    }
 
-    // Get the audio record to verify ownership and get file path
     const { data: audio, error: audioError } = await supabase
       .from('chapter_audio')
       .select('*')
       .eq('chapter_id', chapterId)
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
 
-    // Handle case where audio doesn't exist (Supabase returns PGRST116 for .single() with no results)
     if (audioError) {
-      // PGRST116 is "no rows returned" - this is expected if audio doesn't exist
-      if (audioError.code === 'PGRST116' || audioError.message?.includes('No rows')) {
-        return NextResponse.json(
-          { error: 'Audio file not found' },
-          { status: 404 }
-        )
-      }
-      // Other errors are unexpected
-      console.error('Unexpected error fetching audio:', audioError)
-      return NextResponse.json(
-        { error: 'Failed to fetch audio record' },
-        { status: 500 }
-      )
+      console.error('Error fetching audio record:', audioError)
+      return jsonError('Failed to fetch audio record', 500)
     }
-
     if (!audio) {
-      return NextResponse.json(
-        { error: 'Audio file not found' },
-        { status: 404 }
-      )
+      return jsonError('Audio file not found', 404)
     }
 
-    // Delete the audio file from storage if it exists
-    let storageDeleted = false
+    // Storage deletion failures don't block record deletion — the file may
+    // already be gone.
     if (audio.file_path) {
       const { error: storageError } = await supabase.storage
         .from('audio-files')
         .remove([audio.file_path])
-
       if (storageError) {
         console.error('Storage deletion error:', storageError)
-        // Continue with database deletion even if storage deletion fails
-        // (file might already be deleted or not exist)
-        // This prevents blocking deletion if storage has issues
-      } else {
-        storageDeleted = true
-        console.log('Deleted audio file from storage:', audio.file_path)
       }
     }
 
-    // Delete the database record
     const { error: deleteError } = await supabase
       .from('chapter_audio')
       .delete()
@@ -90,31 +54,16 @@ export async function DELETE(
 
     if (deleteError) {
       console.error('Database deletion error:', deleteError)
-      // If storage was deleted but database deletion failed, log a warning
-      // The file is gone but the record remains (orphaned record)
-      if (storageDeleted) {
-        console.warn('WARNING: Storage file deleted but database record deletion failed. Orphaned record may exist.')
-      }
-      return NextResponse.json(
-        { error: 'Failed to delete audio record' },
-        { status: 500 }
-      )
+      return jsonError('Failed to delete audio record', 500)
     }
-
-    console.log('Successfully deleted audio for chapter:', chapterId)
 
     return NextResponse.json({
       success: true,
       message: 'Audio deleted successfully',
-      deleted_file_size: audio.file_size || 0
+      deleted_file_size: audio.file_size || 0,
     })
-
   } catch (error) {
     console.error('Audio deletion error:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return jsonError('Internal server error', 500)
   }
 }
-

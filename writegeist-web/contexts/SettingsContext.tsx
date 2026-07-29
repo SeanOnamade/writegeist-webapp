@@ -1,35 +1,16 @@
 'use client'
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { api } from '@/lib/api/client'
+import { supabase } from '@/lib/supabase/client'
+import { getSettings, saveSettings, defaultSettings, type AppSettings } from '@/lib/data/settings'
 
-interface AppSettings {
-  theme: 'light' | 'dark' | 'system'
-  openaiApiKey: string
-  autoSave: boolean
-  autoSaveInterval: number
-  defaultProjectStatus: 'draft' | 'active' | 'archived'
-  wordCountGoal: number
-  enableNotifications: boolean
-  language: string
-}
+export type { AppSettings }
 
 interface SettingsContextType {
   settings: AppSettings
   updateSettings: (updates: Partial<AppSettings>) => Promise<boolean>
   loading: boolean
   error: string | null
-}
-
-const defaultSettings: AppSettings = {
-  theme: 'system',
-  openaiApiKey: '',
-  autoSave: true,
-  autoSaveInterval: 30,
-  defaultProjectStatus: 'draft',
-  wordCountGoal: 50000,
-  enableNotifications: true,
-  language: 'en'
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined)
@@ -46,11 +27,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const loadSettings = async () => {
     try {
       setError(null)
-      const result = await api.getSettings()
-      
-      if (result.success && result.data) {
-        setSettings({ ...defaultSettings, ...result.data })
-      }
+      setSettings(await getSettings(supabase))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load settings')
       console.error('Error loading settings:', err)
@@ -62,15 +39,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const updateSettings = async (updates: Partial<AppSettings>): Promise<boolean> => {
     try {
       setError(null)
-      const newSettings = { ...settings, ...updates }
-      
-      const result = await api.saveSettings(newSettings)
-      
-      if (result.success) {
-        setSettings(newSettings)
+
+      // Save only the changed fields; saveSettings merges with stored
+      // preferences, so this never clobbers values changed elsewhere.
+      const saved = await saveSettings(supabase, updates)
+
+      if (saved) {
+        setSettings(prev => ({ ...prev, ...updates }))
         return true
       } else {
-        setError(result.error || 'Failed to save settings')
+        setError('Failed to save settings')
         return false
       }
     } catch (err) {
@@ -105,16 +83,26 @@ export function useSettings() {
 
 // Hook for theme management
 export function useTheme() {
-  const { settings, updateSettings } = useSettings()
+  const { settings, updateSettings, loading } = useSettings()
   
   const setTheme = (theme: AppSettings['theme']) => {
     updateSettings({ theme })
   }
 
-  // Apply theme to document
+  // Apply theme to document and mirror it to localStorage for the no-flash
+  // script in the root layout. Waits for settings to load so the default
+  // ('system') never overrides what the inline script already applied.
   useEffect(() => {
+    if (loading) return
+
     const root = document.documentElement
-    
+
+    try {
+      localStorage.setItem('writegeist-theme', settings.theme)
+    } catch {
+      // localStorage unavailable (private mode etc.) — theme still applies below.
+    }
+
     if (settings.theme === 'dark') {
       root.classList.add('dark')
     } else if (settings.theme === 'light') {
@@ -135,7 +123,7 @@ export function useTheme() {
       
       return () => mediaQuery.removeEventListener('change', updateTheme)
     }
-  }, [settings.theme])
+  }, [settings.theme, loading])
 
   return {
     theme: settings.theme,

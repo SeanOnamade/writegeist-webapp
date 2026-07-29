@@ -74,7 +74,7 @@ export function CreateIdeaDialog({ isOpen, onClose, onIdeaCreated, projects }: C
       <div className="bg-background border rounded-lg p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Capture New Idea</h2>
-          <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={handleClose} className="h-9 w-9 p-0">
             ✕
           </Button>
         </div>
@@ -143,7 +143,8 @@ export function CreateIdeaDialog({ isOpen, onClose, onIdeaCreated, projects }: C
                       <button
                         type="button"
                         onClick={() => handleRemoveTag(tag)}
-                        className="ml-1 text-muted-foreground hover:text-destructive"
+                        aria-label={`Remove tag ${tag}`}
+                        className="ml-0.5 -my-1 -mr-1.5 p-1.5 rounded-full text-muted-foreground hover:text-destructive cursor-pointer"
                       >
                         ×
                       </button>

@@ -1,47 +1,37 @@
 import CryptoJS from 'crypto-js'
 
-// Use environment variable for encryption key
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'writegeist-default-key-change-in-production'
+// Server-only module. ENCRYPTION_KEY is intentionally not NEXT_PUBLIC_*:
+// keys are encrypted/decrypted exclusively in API routes.
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY
 
-// Warn if using default key in production
-if (process.env.NODE_ENV === 'production' && ENCRYPTION_KEY === 'writegeist-default-key-change-in-production') {
-  console.warn('🚨 SECURITY WARNING: Using default encryption key in production! Set ENCRYPTION_KEY environment variable.')
-}
+// Key that shipped hardcoded in old builds. Kept for decrypt-only migration of
+// values stored before server-side encryption was enforced; anything it
+// decrypts gets re-encrypted with the real key on the next save.
+const LEGACY_KEY = 'writegeist-default-key-change-in-production'
 
 /**
- * Encrypt sensitive data like API keys before storing in database
+ * Encrypt sensitive data like API keys before storing in the database.
+ * Throws when ENCRYPTION_KEY is not configured — never silently falls back
+ * to a publicly known key.
  */
 export function encryptData(plaintext: string): string {
+  if (!ENCRYPTION_KEY) {
+    throw new Error('ENCRYPTION_KEY environment variable is not set')
+  }
+  return CryptoJS.AES.encrypt(plaintext, ENCRYPTION_KEY).toString()
+}
+
+function tryDecrypt(ciphertext: string, key: string): string | null {
   try {
-    const encrypted = CryptoJS.AES.encrypt(plaintext, ENCRYPTION_KEY).toString()
-    return encrypted
-  } catch (error) {
-    console.error('Encryption error:', error)
-    throw new Error('Failed to encrypt data')
+    const decrypted = CryptoJS.AES.decrypt(ciphertext, key).toString(CryptoJS.enc.Utf8)
+    return decrypted || null
+  } catch {
+    return null
   }
 }
 
 /**
- * Decrypt sensitive data like API keys when reading from database
- */
-export function decryptData(ciphertext: string): string {
-  try {
-    const bytes = CryptoJS.AES.decrypt(ciphertext, ENCRYPTION_KEY)
-    const decrypted = bytes.toString(CryptoJS.enc.Utf8)
-    
-    if (!decrypted) {
-      throw new Error('Failed to decrypt - invalid data or key')
-    }
-    
-    return decrypted
-  } catch (error) {
-    console.error('Decryption error:', error)
-    throw new Error('Failed to decrypt data')
-  }
-}
-
-/**
- * Check if a string appears to be encrypted
+ * Check if a string appears to be encrypted.
  */
 export function isEncrypted(data: string): boolean {
   // Simple heuristic: encrypted data is base64-like and doesn't start with 'sk-'
@@ -49,20 +39,17 @@ export function isEncrypted(data: string): boolean {
 }
 
 /**
- * Safely get API key - handles both encrypted and plain text (for migration)
+ * Safely get an API key from its stored representation — handles encrypted
+ * values, legacy-key encrypted values, and plaintext (pre-encryption) values.
  */
 export function getApiKey(stored: string): string {
   if (!stored) return ''
-  
-  try {
-    if (isEncrypted(stored)) {
-      return decryptData(stored)
-    } else {
-      // Plain text - return as-is (for backward compatibility)
-      return stored
-    }
-  } catch (error) {
-    console.error('Error processing API key:', error)
-    return ''
+  if (!isEncrypted(stored)) return stored
+
+  if (ENCRYPTION_KEY) {
+    const decrypted = tryDecrypt(stored, ENCRYPTION_KEY)
+    if (decrypted) return decrypted
   }
+
+  return tryDecrypt(stored, LEGACY_KEY) ?? ''
 }

@@ -1,46 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { X, BookOpen, Clock, FileText, Volume2, Book } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import ReactMarkdown from 'react-markdown'
-import rehypeRaw from 'rehype-raw'
-
-interface AudioInfo {
-  id: string
-  status: 'pending' | 'processing' | 'completed' | 'error' | 'outdated'
-  audio_url?: string
-  playUrl?: string
-  signedUrl?: string
-  duration?: number
-  file_size?: number
-  voice_model?: string
-  error_message?: string
-  created_at: string
-  updated_at: string
-}
-
-interface ChapterWithAudio {
-  id: string
-  title: string
-  content?: string  // Optional - not always passed to reduce egress
-  content_preview: string
-  project_id: string
-  order_index: number
-  word_count: number
-  created_at: string
-  project: {
-    title: string
-    description: string
-  }
-  audio: AudioInfo | null
-}
+import { ChapterMarkdown } from '@/components/markdown/ChapterMarkdown'
+import type { AudioLibraryChapter } from '@/lib/data/audioLibrary'
 
 interface ReadAlongModalProps {
   isOpen: boolean
   onClose: () => void
-  chapter: ChapterWithAudio
+  chapter: AudioLibraryChapter
 }
 
 export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps) {
@@ -48,14 +18,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch full chapter content when modal opens
-  useEffect(() => {
-    if (isOpen && chapter?.id) {
-      loadChapterContent()
-    }
-  }, [isOpen, chapter?.id])
-
-  const loadChapterContent = async () => {
+  const loadChapterContent = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -64,7 +27,6 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
         throw new Error('Invalid chapter ID')
       }
 
-      // Try to get full content from the chapters API
       const response = await fetch(`/api/chapters/${chapter.id}`)
       if (!response.ok) {
         throw new Error(`Failed to load chapter content: ${response.status}`)
@@ -72,19 +34,26 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
 
       const chapterData = await response.json()
       if (chapterData && typeof chapterData === 'object') {
-        setFullContent(chapterData.content || chapter.content || chapter.content_preview || '')
+        setFullContent(chapterData.content || chapter.content_preview || '')
       } else {
         throw new Error('Invalid chapter data format')
       }
     } catch (err) {
       console.error('Error loading chapter content:', err)
       setError('Failed to load chapter content')
-      // Fallback to the content we already have
-      setFullContent(chapter?.content || chapter?.content_preview || '')
+      // Fallback to the preview we already have
+      setFullContent(chapter?.content_preview || '')
     } finally {
       setLoading(false)
     }
-  }
+  }, [chapter?.id, chapter?.content_preview])
+
+  // Fetch full chapter content when modal opens
+  useEffect(() => {
+    if (isOpen && chapter?.id) {
+      loadChapterContent()
+    }
+  }, [isOpen, chapter?.id, loadChapterContent])
 
   const formatDuration = (seconds?: number) => {
     if (!seconds) return 'Unknown'
@@ -127,7 +96,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
               <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs md:text-sm text-muted-foreground mt-1">
                 <div className="flex items-center gap-1">
                   <FileText className="h-3 w-3 md:h-4 md:w-4" />
-                  <span>{countWords(fullContent || chapter.content || chapter.content_preview).toLocaleString()} words</span>
+                  <span>{countWords(fullContent || chapter.content_preview).toLocaleString()} words</span>
                 </div>
                 {chapter.audio && chapter.audio.duration && (
                   <div className="flex items-center gap-1">
@@ -159,7 +128,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground flex-shrink-0 ml-2"
+            className="text-muted-foreground hover:text-foreground flex-shrink-0 ml-2 h-9 w-9 p-0"
           >
             <X className="h-4 w-4 md:h-5 md:w-5" />
           </Button>
@@ -203,65 +172,7 @@ export function ReadAlongModal({ isOpen, onClose, chapter }: ReadAlongModalProps
             <div className="p-4 md:p-8 lg:p-12">
               <div className="max-w-4xl mx-auto">
                 <div className="max-w-none">
-                  <ReactMarkdown
-                    rehypePlugins={[rehypeRaw]}
-                    components={{
-                      // Enhance paragraph spacing
-                      p: ({ children }) => (
-                        <p className="mb-6 leading-relaxed text-foreground text-base md:text-lg">{children}</p>
-                      ),
-                      // Style headings
-                      h1: ({ children }) => (
-                        <h1 className="text-2xl md:text-3xl font-bold mb-6 mt-8 text-foreground border-b border-border pb-2">{children}</h1>
-                      ),
-                      h2: ({ children }) => (
-                        <h2 className="text-xl md:text-2xl font-semibold mb-4 mt-6 text-foreground">{children}</h2>
-                      ),
-                      h3: ({ children }) => (
-                        <h3 className="text-lg md:text-xl font-semibold mb-3 mt-5 text-foreground">{children}</h3>
-                      ),
-                      // Style emphasis
-                      em: ({ children }) => (
-                        <em className="italic text-primary font-medium">{children}</em>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-bold text-foreground">{children}</strong>
-                      ),
-                      // Style underline
-                      u: ({ children }) => (
-                        <u className="underline text-foreground">{children}</u>
-                      ),
-                      // Style strikethrough  
-                      del: ({ children }) => (
-                        <del className="line-through text-muted-foreground">{children}</del>
-                      ),
-                      s: ({ children }) => (
-                        <s className="line-through text-muted-foreground">{children}</s>
-                      ),
-                      // Style highlight
-                      mark: ({ children }) => (
-                        <mark className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">{children}</mark>
-                      ),
-                      // Style blockquotes
-                      blockquote: ({ children }) => (
-                        <blockquote className="border-l-4 border-primary pl-6 my-6 italic text-muted-foreground bg-muted/30 py-4 rounded-r-lg">
-                          {children}
-                        </blockquote>
-                      ),
-                      // Style lists
-                      ul: ({ children }) => (
-                        <ul className="mb-4 pl-6 list-disc text-foreground">{children}</ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="mb-4 pl-6 list-decimal text-foreground">{children}</ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="mb-2 leading-relaxed">{children}</li>
-                      ),
-                    }}
-                  >
-                    {fullContent}
-                  </ReactMarkdown>
+                  <ChapterMarkdown content={fullContent} />
                 </div>
               </div>
             </div>

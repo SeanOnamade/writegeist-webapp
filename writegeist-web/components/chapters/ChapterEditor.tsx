@@ -2,10 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { IdeasSearchModal } from '@/components/ideas/IdeasSearchModal'
-import { SimpleRichTextEditor } from './SimpleRichTextEditor'
+import { ChapterMetaPanel } from './ChapterMetaPanel'
+import { RichTextEditor } from './RichTextEditor'
 import type { Chapter } from '@/types/database'
 import { chaptersAPI } from '@/lib/api/chapters'
 
@@ -132,19 +136,16 @@ export function ChapterEditor({
     performSave(true)
   }
 
-  const handleCancel = async () => {
-    if (hasUnsavedChanges && !confirm('You have unsaved changes. Are you sure you want to cancel?')) {
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setConfirmCancelOpen(true)
       return
     }
-    
-    // If there are unsaved changes, save them before canceling
-    if (hasUnsavedChanges) {
-      // Auto-saving before cancel
-      await performSave(false)
-      // Add small delay to ensure save completes
-      await new Promise(resolve => setTimeout(resolve, 500))
-    }
-    
+    onCancel?.()
+  }
+
+  const handleSaveAndClose = async () => {
+    await performSave(false)
     onCancel?.()
   }
 
@@ -184,6 +185,7 @@ export function ChapterEditor({
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [ideasModalOpen, setIdeasModalOpen] = useState(false)
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false)
 
   return (
     <div className="flex flex-col h-full">
@@ -197,16 +199,16 @@ export function ChapterEditor({
               placeholder="Chapter title"
               className="font-semibold text-base sm:text-lg border-none shadow-none p-0 h-auto flex-1"
             />
-            <select
+            <Select
               value={status}
               onChange={(e) => setStatus(e.target.value as Chapter['status'])}
-              className="px-3 py-1 text-sm border border-input rounded-md bg-background"
+              className="h-9 w-auto text-sm"
             >
               <option value="draft">Draft</option>
               <option value="in_progress">In Progress</option>
               <option value="completed">Completed</option>
               <option value="published">Published</option>
-            </select>
+            </Select>
           </div>
           
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -262,11 +264,11 @@ export function ChapterEditor({
         <div className="flex-1 flex flex-col">
           {editorError && (
             <div className="mx-4 mt-2 p-2 bg-destructive/10 border border-destructive rounded text-sm text-destructive">
-              ⚠️ Editor encountered an issue. Try refreshing if problems persist.
+              Saving failed. Your changes are still in the editor — try saving again.
             </div>
           )}
           
-          <SimpleRichTextEditor
+          <RichTextEditor
             content={content}
             onChange={setContent}
             placeholder="Start writing your chapter..."
@@ -274,198 +276,48 @@ export function ChapterEditor({
           />
         </div>
 
-        {/* Desktop Writing Stats Sidebar */}
+        {/* Desktop meta sidebar */}
         <div className="hidden lg:flex lg:w-64 border-l bg-muted/30 p-4">
-          <div className="w-full">
-            <div className="mb-6">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full justify-start"
-                onClick={() => setIdeasModalOpen(true)}
-              >
-                💡 Browse Ideas
-              </Button>
-            </div>
-
-            <div className="mb-6">
-              <h4 className="font-semibold mb-2">Writing Stats</h4>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-sm text-muted-foreground">Word Count</div>
-                  <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Character Count</div>
-                  <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Paragraphs</div>
-                  <div className="text-lg font-semibold">
-                    {content.split('\n\n').filter(p => p.trim().length > 0).length}
-                  </div>
-                </div>
-                
-                <div>
-                  <div className="text-sm text-muted-foreground">Reading Time</div>
-                  <div className="text-lg font-semibold">
-                    {Math.ceil(wordCount / 200)} min
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h4 className="font-semibold mb-2">Chapter Status</h4>
-              <div className="space-y-2">
-                {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
-                  <label key={statusOption} className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      name="status"
-                      value={statusOption}
-                      checked={status === statusOption}
-                      onChange={(e) => setStatus(e.target.value as Chapter['status'])}
-                      className="rounded"
-                    />
-                    <span className="text-sm capitalize">{statusOption.replace('_', ' ')}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-6">
-              <h4 className="font-semibold mb-2">Quick Actions</h4>
-              <div className="space-y-2">
-                <Button variant="outline" size="sm" className="w-full justify-start">
-                  📊 Analyze Chapter
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={handleGenerateAudio}
-                >
-                  🎵 Generate Audio
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={handleGetWritingHelp}
-                >
-                  🤖 Get Writing Help
-                </Button>
-              </div>
-            </div>
-          </div>
+          <ChapterMetaPanel
+            content={content}
+            wordCount={wordCount}
+            status={status}
+            onStatusChange={setStatus}
+            onBrowseIdeas={() => setIdeasModalOpen(true)}
+            onGenerateAudio={handleGenerateAudio}
+            onGetWritingHelp={handleGetWritingHelp}
+            idPrefix="desktop"
+          />
         </div>
 
-        {/* Mobile Stats Overlay */}
+        {/* Mobile meta overlay */}
         {sidebarOpen && (
           <div className="lg:hidden absolute inset-0 z-50 flex">
-            <div 
-              className="flex-1 bg-black/20" 
-              onClick={() => setSidebarOpen(false)}
-            />
+            <div className="flex-1 bg-black/20" onClick={() => setSidebarOpen(false)} />
             <div className="w-80 max-w-[90vw] border-l bg-background p-4 shadow-xl overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold">Writing Tools</h3>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSidebarOpen(false)}
-                  className="p-1 h-6 w-6"
+                  className="p-0 h-9 w-9"
+                  aria-label="Close writing tools"
                 >
-                  ✕
-                </Button>
-              </div>
-              
-              <div className="mb-6">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="w-full justify-start"
-                  onClick={() => setIdeasModalOpen(true)}
-                >
-                  💡 Browse Ideas
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
-              <div className="mb-6">
-                <h4 className="font-semibold mb-2">Writing Stats</h4>
-                <div className="space-y-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Word Count</div>
-                    <div className="text-2xl font-bold">{wordCount.toLocaleString()}</div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-muted-foreground">Character Count</div>
-                    <div className="text-lg font-semibold">{content.length.toLocaleString()}</div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-muted-foreground">Paragraphs</div>
-                    <div className="text-lg font-semibold">
-                      {content.split('\n\n').filter(p => p.trim().length > 0).length}
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <div className="text-sm text-muted-foreground">Reading Time</div>
-                    <div className="text-lg font-semibold">
-                      {Math.ceil(wordCount / 200)} min
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <h4 className="font-semibold mb-2">Chapter Status</h4>
-                <div className="space-y-2">
-                  {(['draft', 'in_progress', 'completed', 'published'] as const).map(statusOption => (
-                    <label key={statusOption} className="flex items-center space-x-2">
-                      <input
-                        type="radio"
-                        name="mobile-status"
-                        value={statusOption}
-                        checked={status === statusOption}
-                        onChange={(e) => setStatus(e.target.value as Chapter['status'])}
-                        className="rounded"
-                      />
-                      <span className="text-sm capitalize">{statusOption.replace('_', ' ')}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="mt-6">
-                <h4 className="font-semibold mb-2">Quick Actions</h4>
-                <div className="space-y-2">
-                  <Button variant="outline" size="sm" className="w-full justify-start">
-                    📊 Analyze Chapter
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start"
-                    onClick={handleGenerateAudio}
-                  >
-                    🎵 Generate Audio
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="w-full justify-start"
-                    onClick={handleGetWritingHelp}
-                  >
-                    🤖 Get Writing Help
-                  </Button>
-                </div>
-              </div>
+              <ChapterMetaPanel
+                content={content}
+                wordCount={wordCount}
+                status={status}
+                onStatusChange={setStatus}
+                onBrowseIdeas={() => setIdeasModalOpen(true)}
+                onGenerateAudio={handleGenerateAudio}
+                onGetWritingHelp={handleGetWritingHelp}
+                idPrefix="mobile"
+              />
             </div>
           </div>
         )}
@@ -499,6 +351,16 @@ export function ChapterEditor({
         isOpen={ideasModalOpen}
         onClose={() => setIdeasModalOpen(false)}
         projectId={chapter.project_id}
+      />
+
+      <ConfirmDialog
+        open={confirmCancelOpen}
+        onOpenChange={setConfirmCancelOpen}
+        title="Unsaved changes"
+        description="Save your changes before closing the editor?"
+        confirmLabel="Save and close"
+        cancelLabel="Keep editing"
+        onConfirm={handleSaveAndClose}
       />
     </div>
   )

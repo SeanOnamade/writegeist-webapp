@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { getOpenAIApiKey } from '@/lib/api/openai-key'
+import { getOpenAIApiKey } from '@/lib/api/provider-keys'
 import type { Json } from '@/types/database'
 
 export interface EmbeddingSearchResult {
@@ -79,7 +79,26 @@ async function vectorSearch(
     match_threshold: MATCH_THRESHOLD,
     match_count: limit * 2,
     project_filter: projectId,
+    user_filter: userId,
   })
+
+  // PGRST202: the hosted DB still has the pre-user_filter function signature
+  // (migration 20260728000001 not applied yet). Fall back to the legacy
+  // signature — safe because callers verify project ownership first.
+  if (error?.code === 'PGRST202') {
+    console.warn(
+      'search_embeddings user_filter migration not applied; using legacy signature. ' +
+        'Run supabase/migrations/20260728000001_search_embeddings_user_filter.sql.'
+    )
+    const fallback = await supabase.rpc('search_embeddings', {
+      query_embedding: queryEmbedding,
+      match_threshold: MATCH_THRESHOLD,
+      match_count: limit * 2,
+      project_filter: projectId,
+    })
+    if (fallback.error || !fallback.data) return []
+    return fallback.data.slice(0, limit) as EmbeddingSearchResult[]
+  }
 
   if (error || !results) return []
 
@@ -92,35 +111,27 @@ async function keywordSearch(
   userId: string,
   limit: number
 ): Promise<EmbeddingSearchResult[]> {
+  // PostgREST .or() filter values can't contain commas or parens; terms are
+  // word-like already, this is just defensive.
   const terms = extractSearchTerms(query)
+    .map((term) => term.replace(/[(),]/g, ''))
+    .filter(Boolean)
   if (terms.length === 0) return []
 
   const supabase = await createServiceRoleClient()
-  const fallbackResults: EmbeddingSearchResult[] = []
-  const perTerm = Math.max(1, Math.floor(limit / terms.length))
 
-  for (const term of terms) {
-    const { data: termResults } = await supabase
-      .from('document_embeddings')
-      .select('id, content_text, chapter_id, project_id, content_type, metadata')
-      .eq('project_id', projectId)
-      .eq('user_id', userId)
-      .ilike('content_text', `%${term}%`)
-      .limit(perTerm)
+  const { data: results } = await supabase
+    .from('document_embeddings')
+    .select('id, content_text, chapter_id, project_id, content_type, metadata')
+    .eq('project_id', projectId)
+    .eq('user_id', userId)
+    .or(terms.map((term) => `content_text.ilike.%${term}%`).join(','))
+    .limit(limit)
 
-    if (termResults) {
-      fallbackResults.push(
-        ...termResults.map((r, index) => ({
-          ...r,
-          similarity: KEYWORD_MAX_SIMILARITY - index * 0.02,
-        }))
-      )
-    }
-  }
-
-  return fallbackResults.filter(
-    (result, index, self) => index === self.findIndex((r) => r.id === result.id)
-  )
+  return (results ?? []).map((r, index) => ({
+    ...r,
+    similarity: KEYWORD_MAX_SIMILARITY - index * 0.02,
+  }))
 }
 
 function mergeResults(

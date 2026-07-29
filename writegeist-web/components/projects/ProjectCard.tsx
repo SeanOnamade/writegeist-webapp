@@ -4,7 +4,10 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { BookOpen } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { BookOpen, Pencil, Trash2, Loader2 } from 'lucide-react'
 import type { Project } from '@/types/database'
 import { projectsAPI } from '@/lib/api/projects'
 
@@ -20,6 +23,7 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
   const [description, setDescription] = useState(project.description || '')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
 
   const handleSave = async () => {
     if (!title.trim()) return
@@ -44,10 +48,6 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this project? This action cannot be undone.')) {
-      return
-    }
-
     setDeleting(true)
     try {
       const success = await projectsAPI.delete(project.id)
@@ -67,15 +67,6 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
     setIsEditing(false)
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 border-green-200'
-      case 'archived': return 'bg-gray-100 text-gray-800 border-gray-200'
-      case 'draft': return 'bg-blue-100 text-blue-800 border-blue-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -85,7 +76,7 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
   }
 
   return (
-    <div className="bg-card border rounded-lg p-6 hover:shadow-md transition-shadow">
+    <div className="bg-card border rounded-lg p-5 shadow-sm transition-all hover:shadow-md hover:border-primary/40">
       {isEditing ? (
         <div className="space-y-4">
           <Input
@@ -94,11 +85,11 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
             placeholder="Project title"
             className="font-semibold text-lg"
           />
-          <textarea
+          <Textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Project description (optional)"
-            className="w-full p-2 border border-input rounded-md bg-background resize-none"
+            className="resize-none"
             rows={3}
           />
           <div className="flex justify-end space-x-2">
@@ -113,9 +104,9 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
       ) : (
         <>
           <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Link href={`/project/${project.id}`}>
-                <h3 className="text-lg font-semibold hover:text-primary cursor-pointer">
+                <h3 className="text-lg font-semibold hover:text-primary cursor-pointer truncate">
                   {project.title}
                 </h3>
               </Link>
@@ -125,10 +116,8 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
                 </p>
               )}
             </div>
-            <div className="flex items-center space-x-2 ml-4">
-              <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(project.status)}`}>
-                {project.status}
-              </span>
+            <div className="flex items-center space-x-2 ml-4 flex-shrink-0">
+              <StatusBadge status={project.status} />
               <div className="flex space-x-1">
                 <Button
                   variant="ghost"
@@ -136,16 +125,18 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
                   onClick={() => setIsEditing(true)}
                   className="h-8 w-8 p-0"
                 >
-                  ✏️
+                  <Pencil className="h-4 w-4" />
+                  <span className="sr-only">Edit project</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deleting}
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                 >
-                  {deleting ? '⏳' : '🗑️'}
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <span className="sr-only">Delete project</span>
                 </Button>
               </div>
             </div>
@@ -194,6 +185,16 @@ export function ProjectCard({ project, onUpdate, onDelete }: ProjectCardProps) {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title={`Delete "${project.title}"?`}
+        description="All chapters in this project will also be deleted. This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

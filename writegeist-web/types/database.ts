@@ -663,6 +663,7 @@ export type Database = {
           match_threshold: number
           match_count: number
           project_filter?: string | null
+          user_filter?: string | null
         }
         Returns: {
           id: string

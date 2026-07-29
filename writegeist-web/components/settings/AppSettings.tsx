@@ -3,40 +3,70 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api } from '@/lib/api/client'
+import { Select } from '@/components/ui/select'
+import { supabase } from '@/lib/supabase/client'
+import {
+  getSettings,
+  saveSettings,
+  defaultSettings,
+  type AppSettings as AppSettingsType,
+} from '@/lib/data/settings'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-import { encryptData, getApiKey } from '@/lib/crypto'
+import { useTheme } from '@/contexts/SettingsContext'
 
-interface AppSettings {
-  theme: 'light' | 'dark' | 'system'
-  openaiApiKey: string
-  autoSave: boolean
-  autoSaveInterval: number
-  defaultProjectStatus: 'draft' | 'active' | 'archived'
-  wordCountGoal: number
-  enableNotifications: boolean
-  language: string
+// Theme is applied and saved instantly through useTheme(), so the form state
+// only tracks the remaining settings. It must never hold theme, or "Save
+// Settings" would write a stale theme over one picked after the page loaded.
+type GeneralSettings = Omit<AppSettingsType, 'theme'>
+
+function stripTheme({ theme: _theme, ...rest }: AppSettingsType): GeneralSettings {
+  return rest
 }
 
-const defaultSettings: AppSettings = {
-  theme: 'system',
-  openaiApiKey: '',
-  autoSave: true,
-  autoSaveInterval: 30,
-  defaultProjectStatus: 'draft',
-  wordCountGoal: 50000,
-  enableNotifications: true,
-  language: 'en'
-}
+type Provider = 'openai' | 'anthropic'
+
+const PROVIDER_FIELDS: {
+  provider: Provider
+  label: string
+  placeholder: string
+  hint: string
+}[] = [
+  {
+    provider: 'openai',
+    label: 'OpenAI API Key',
+    placeholder: 'sk-...',
+    hint: 'Used for manuscript search, audio narration, and GPT chat responses.',
+  },
+  {
+    provider: 'anthropic',
+    label: 'Anthropic API Key',
+    placeholder: 'sk-ant-...',
+    hint: 'Optional. Powers chat responses when Claude is selected below.',
+  },
+]
+
+type PerProvider<T> = Record<Provider, T>
 
 export function AppSettings() {
-  const [settings, setSettings] = useState<AppSettings>(defaultSettings)
+  const { theme, setTheme } = useTheme()
+  const [settings, setSettings] = useState<GeneralSettings>(() => stripTheme(defaultSettings))
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
-  const [validatingApiKey, setValidatingApiKey] = useState(false)
-  const [apiKeyStatus, setApiKeyStatus] = useState<'valid' | 'invalid' | null>(null)
+  const [apiKeyInputs, setApiKeyInputs] = useState<PerProvider<string>>({
+    openai: '',
+    anthropic: '',
+  })
+  const [hasStoredKeys, setHasStoredKeys] = useState<PerProvider<boolean>>({
+    openai: false,
+    anthropic: false,
+  })
+  const [validatingProvider, setValidatingProvider] = useState<Provider | null>(null)
+  const [keyStatuses, setKeyStatuses] = useState<PerProvider<'valid' | 'invalid' | null>>({
+    openai: null,
+    anthropic: null,
+  })
   const { toast } = useToast()
 
   useEffect(() => {
@@ -45,22 +75,16 @@ export function AppSettings() {
 
   const loadSettings = async () => {
     try {
-      const result = await api.getSettings()
-      if (result.success && result.data) {
-        const loadedSettings = { ...defaultSettings, ...result.data }
-        
-        // Decrypt API key if it exists
-        if (loadedSettings.openaiApiKey) {
-          try {
-            loadedSettings.openaiApiKey = getApiKey(loadedSettings.openaiApiKey as string)
-          } catch (error) {
-            console.error('Error decrypting API key:', error)
-            loadedSettings.openaiApiKey = '' // Clear invalid key
-          }
-        }
-        
-        setSettings(loadedSettings)
-      }
+      const [stored, keyResponse] = await Promise.all([
+        getSettings(supabase),
+        fetch('/api/settings/api-keys').then((res) => (res.ok ? res.json() : null)).catch(() => null),
+      ])
+
+      setSettings(stripTheme(stored))
+      setHasStoredKeys({
+        openai: Boolean(keyResponse?.openai),
+        anthropic: Boolean(keyResponse?.anthropic),
+      })
     } catch (error) {
       console.error('Error loading settings:', error)
     } finally {
@@ -73,18 +97,33 @@ export function AppSettings() {
     setMessage('')
 
     try {
-      // Encrypt API key before saving
-      const settingsToSave = { ...settings }
-      if (settingsToSave.openaiApiKey && settingsToSave.openaiApiKey.trim()) {
-        settingsToSave.openaiApiKey = encryptData(settingsToSave.openaiApiKey.trim())
+      // API keys are encrypted and stored server-side, separately from the
+      // rest of the preferences.
+      for (const { provider, label } of PROVIDER_FIELDS) {
+        const trimmedKey = apiKeyInputs[provider].trim()
+        if (!trimmedKey) continue
+
+        const keyResponse = await fetch('/api/settings/api-keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, apiKey: trimmedKey }),
+        })
+        const keyResult = await keyResponse.json()
+        if (!keyResponse.ok) {
+          setMessage(`Failed to save ${label}: ` + (keyResult.error || 'Unknown error'))
+          setSaving(false)
+          return
+        }
+        setHasStoredKeys((prev) => ({ ...prev, [provider]: true }))
+        setApiKeyInputs((prev) => ({ ...prev, [provider]: '' }))
+        setKeyStatuses((prev) => ({ ...prev, [provider]: null }))
       }
 
-      const result = await api.saveSettings(settingsToSave as unknown as Record<string, unknown>)
-      if (result.success) {
-        setMessage('Settings saved successfully! (API key encrypted)')
-        setApiKeyStatus(null) // Reset validation status after save
+      const saved = await saveSettings(supabase, settings)
+      if (saved) {
+        setMessage('Settings saved successfully!')
       } else {
-        setMessage('Failed to save settings: ' + (result.error || 'Unknown error'))
+        setMessage('Failed to save settings')
       }
     } catch (error) {
       setMessage('Error saving settings: ' + (error instanceof Error ? error.message : 'Unknown error'))
@@ -93,63 +132,60 @@ export function AppSettings() {
     }
   }
 
-  const updateSetting = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
+  const updateSetting = <K extends keyof GeneralSettings>(key: K, value: GeneralSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }))
-    // Reset API key status when key changes
-    if (key === 'openaiApiKey') {
-      setApiKeyStatus(null)
-    }
   }
 
-  const validateApiKey = async () => {
-    const keyToTest = settings.openaiApiKey?.trim()
-    
-    if (!keyToTest || keyToTest.length === 0) {
+  const validateApiKey = async (provider: Provider) => {
+    const keyToTest = apiKeyInputs[provider].trim()
+    const { label } = PROVIDER_FIELDS.find((f) => f.provider === provider)!
+
+    if (!keyToTest) {
       toast({
-        title: "⚠️ No API Key",
-        description: "Please enter an OpenAI API key first.",
+        title: "No API Key",
+        description: `Please enter an ${label} first.`,
         variant: "destructive",
       })
       return
     }
 
-    setValidatingApiKey(true)
-    setApiKeyStatus(null)
+    setValidatingProvider(provider)
+    setKeyStatuses((prev) => ({ ...prev, [provider]: null }))
 
     try {
       // Test the current input value, not the saved one
-      const response = await fetch('/api/audio/validate-key', {
+      const response = await fetch('/api/settings/api-keys/validate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: keyToTest })
+        body: JSON.stringify({ provider, apiKey: keyToTest })
       })
 
       const result = await response.json()
-      
+
       if (result.valid) {
-        setApiKeyStatus('valid')
+        setKeyStatuses((prev) => ({ ...prev, [provider]: 'valid' }))
         toast({
-          title: "✅ API Key Valid",
-          description: result.message || "Your OpenAI API key is working correctly!",
+          title: "API Key Valid",
+          description: result.message || "Your API key is working correctly!",
         })
       } else {
-        setApiKeyStatus('invalid')
+        setKeyStatuses((prev) => ({ ...prev, [provider]: 'invalid' }))
         toast({
-          title: "❌ API Key Invalid",
-          description: result.error || "Please check your OpenAI API key.",
+          title: "API Key Invalid",
+          description: result.error || `Please check your ${label}.`,
           variant: "destructive",
         })
       }
     } catch (error) {
       console.error('API key validation error:', error)
-      setApiKeyStatus('invalid')
+      setKeyStatuses((prev) => ({ ...prev, [provider]: 'invalid' }))
       toast({
-        title: "⚠️ Validation Failed",
+        title: "Validation Failed",
         description: "Unable to validate API key. Please try again.",
         variant: "destructive",
       })
     } finally {
-      setValidatingApiKey(false)
+      setValidatingProvider(null)
     }
   }
 
@@ -181,64 +217,94 @@ export function AppSettings() {
             <label htmlFor="theme" className="block text-sm font-medium mb-2">
               Theme
             </label>
-            <select
+            <Select
               id="theme"
-              value={settings.theme}
-              onChange={(e) => updateSetting('theme', e.target.value as AppSettings['theme'])}
-              className="w-full p-2 border border-input rounded-md bg-background"
+              value={theme}
+              onChange={(e) => setTheme(e.target.value as 'light' | 'dark' | 'system')}
             >
               <option value="light">Light</option>
               <option value="dark">Dark</option>
               <option value="system">System</option>
-            </select>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Applied and saved immediately.
+            </p>
           </div>
         </div>
 
         {/* AI Settings */}
         <div className="space-y-3">
           <h4 className="text-sm font-medium">AI Integration</h4>
-          <div>
-            <label htmlFor="openaiApiKey" className="block text-sm font-medium mb-2">
-              OpenAI API Key
-            </label>
-            <div className="flex gap-2">
-              <Input
-                id="openaiApiKey"
-                type="password"
-                value={settings.openaiApiKey}
-                onChange={(e) => updateSetting('openaiApiKey', e.target.value)}
-                placeholder="sk-..."
-                className="flex-1"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={validateApiKey}
-                disabled={validatingApiKey || !settings.openaiApiKey?.trim()}
-                className="flex items-center gap-2 px-3"
-              >
-                {validatingApiKey ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Validating...
-                  </>
-                ) : apiKeyStatus === 'valid' ? (
-                  <>
-                    <CheckCircle className="h-4 w-4 text-green-500" />
-                    Valid
-                  </>
-                ) : apiKeyStatus === 'invalid' ? (
-                  <>
-                    <XCircle className="h-4 w-4 text-red-500" />
-                    Invalid
-                  </>
-                ) : (
-                  'Validate'
-                )}
-              </Button>
+          {PROVIDER_FIELDS.map(({ provider, label, placeholder, hint }) => (
+            <div key={provider}>
+              <label htmlFor={`${provider}ApiKey`} className="block text-sm font-medium mb-2">
+                {label}
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  id={`${provider}ApiKey`}
+                  type="password"
+                  value={apiKeyInputs[provider]}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setApiKeyInputs((prev) => ({ ...prev, [provider]: value }))
+                    setKeyStatuses((prev) => ({ ...prev, [provider]: null }))
+                  }}
+                  placeholder={
+                    hasStoredKeys[provider]
+                      ? 'Key saved — enter a new key to replace it'
+                      : placeholder
+                  }
+                  className="flex-1"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => validateApiKey(provider)}
+                  disabled={validatingProvider !== null || !apiKeyInputs[provider].trim()}
+                  className="flex items-center gap-2 px-3"
+                >
+                  {validatingProvider === provider ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Validating...
+                    </>
+                  ) : keyStatuses[provider] === 'valid' ? (
+                    <>
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                      Valid
+                    </>
+                  ) : keyStatuses[provider] === 'invalid' ? (
+                    <>
+                      <XCircle className="h-4 w-4 text-red-500" />
+                      Invalid
+                    </>
+                  ) : (
+                    'Validate'
+                  )}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                {hint} Stored encrypted on the server and never sent back to the browser.
+              </p>
             </div>
+          ))}
+
+          <div>
+            <label htmlFor="chatProvider" className="block text-sm font-medium mb-2">
+              Chat Model
+            </label>
+            <Select
+              id="chatProvider"
+              value={settings.chatProvider}
+              onChange={(e) => updateSetting('chatProvider', e.target.value as Provider)}
+            >
+              <option value="openai">OpenAI (GPT)</option>
+              <option value="anthropic">Anthropic (Claude)</option>
+            </Select>
             <p className="text-xs text-muted-foreground mt-1">
-              Required for AI-powered features like chapter analysis, chat, and audio generation.
+              Chooses which model answers chat questions. Manuscript search and audio always use
+              your OpenAI key — Anthropic does not offer embeddings or text-to-speech.
             </p>
           </div>
         </div>
@@ -265,16 +331,15 @@ export function AppSettings() {
             <label htmlFor="defaultProjectStatus" className="block text-sm font-medium mb-2">
               Default Project Status
             </label>
-            <select
+            <Select
               id="defaultProjectStatus"
               value={settings.defaultProjectStatus}
-              onChange={(e) => updateSetting('defaultProjectStatus', e.target.value as AppSettings['defaultProjectStatus'])}
-              className="w-full p-2 border border-input rounded-md bg-background"
+              onChange={(e) => updateSetting('defaultProjectStatus', e.target.value as GeneralSettings['defaultProjectStatus'])}
             >
               <option value="draft">Draft</option>
               <option value="active">Active</option>
               <option value="archived">Archived</option>
-            </select>
+            </Select>
           </div>
         </div>
 

@@ -24,7 +24,7 @@ export class ChapterContentStorage {
     content: string, 
     metadata: {
       title?: string
-      status?: string
+      status?: Chapter['status']
       wordCount?: number
       orderIndex?: number
       projectId?: string
@@ -65,7 +65,7 @@ export class ChapterContentStorage {
           .update({
             content: content,
             title: metadata.title,
-            status: metadata.status as any,
+            status: metadata.status,
             word_count: metadata.wordCount,
             order_index: metadata.orderIndex,
             updated_at: new Date().toISOString()
@@ -96,7 +96,7 @@ export class ChapterContentStorage {
         .from('chapters')
         .update({
           title: metadata.title,
-          status: metadata.status as any,
+          status: metadata.status,
           word_count: metadata.wordCount,
           order_index: metadata.orderIndex,
           content_file_path: uploadData.path,

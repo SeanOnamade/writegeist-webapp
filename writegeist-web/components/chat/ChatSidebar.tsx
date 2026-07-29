@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { MessageSquare, Pencil, Search, SquarePen, X } from 'lucide-react'
 import type { ChatSession, Project } from '@/types/database'
 import { chatAPI } from '@/lib/api/chat'
 import { projectsAPI } from '@/lib/api/projects'
@@ -24,6 +27,8 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
   const [editingTitle, setEditingTitle] = useState('')
   const [emptySessionCount, setEmptySessionCount] = useState(0)
   const [clearingEmpty, setClearingEmpty] = useState(false)
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null)
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -46,13 +51,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
     }
   }
 
-  const handleDeleteSession = async (sessionId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    
-    if (!confirm('Are you sure you want to delete this chat session? This action cannot be undone.')) {
-      return
-    }
-
+  const handleDeleteSession = async (sessionId: string) => {
     try {
       const success = await chatAPI.deleteSession(sessionId)
       if (success) {
@@ -72,7 +71,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
     setEditingTitle(session.title)
   }
 
-  const handleSaveRename = async (sessionId: string, e: React.MouseEvent) => {
+  const handleSaveRename = async (sessionId: string, e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation()
     
     if (!editingTitle.trim()) {
@@ -96,7 +95,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
     }
   }
 
-  const handleCancelRename = (e: React.MouseEvent) => {
+  const handleCancelRename = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation()
     setEditingSessionId(null)
     setEditingTitle('')
@@ -104,14 +103,6 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
 
   const handleClearEmptyChats = async () => {
     if (emptySessionCount === 0) return
-
-    if (
-      !confirm(
-        `Delete ${emptySessionCount} empty "New Chat" session${emptySessionCount === 1 ? '' : 's'}? This cannot be undone.`
-      )
-    ) {
-      return
-    }
 
     setClearingEmpty(true)
     try {
@@ -188,7 +179,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
 
   if (loading) {
     return (
-      <div className="w-80 border-r bg-muted/30 p-4">
+      <div className="w-full md:w-72 border-r bg-card p-4">
         <div className="animate-pulse space-y-4">
           <div className="h-10 bg-muted rounded"></div>
           <div className="h-8 bg-muted rounded"></div>
@@ -203,55 +194,57 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
   }
 
   return (
-    <div className="w-80 border-r bg-muted/30 flex flex-col h-full max-h-full">
+    <div className="w-full md:w-72 border-r bg-card flex flex-col h-full max-h-full">
       {/* Header */}
-      <div className="p-4 border-b flex-shrink-0">
-        <Button onClick={onNewChat} className="w-full mb-4">
-          + New Chat
+      <div className="p-3 border-b flex-shrink-0 space-y-2">
+        <Button onClick={onNewChat} className="w-full gap-2 shadow-sm">
+          <SquarePen className="h-4 w-4" />
+          New Chat
         </Button>
-        
-        <div className="space-y-2">
+
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Search chats..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="text-sm"
+            className="h-9 pl-9"
           />
-          
-          <select
-            value={projectFilter}
-            onChange={(e) => setProjectFilter(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-input rounded-md bg-background"
-          >
-            <option value="all">All Chats</option>
-            <option value="general">General Chats</option>
-            {projects.map(project => (
-              <option key={project.id} value={project.id}>
-                {project.title}
-              </option>
-            ))}
-          </select>
         </div>
+
+        <Select
+          value={projectFilter}
+          onChange={(e) => setProjectFilter(e.target.value)}
+          className="h-9"
+        >
+          <option value="all">All Chats</option>
+          <option value="general">General Chats</option>
+          {projects.map(project => (
+            <option key={project.id} value={project.id}>
+              {project.title}
+            </option>
+          ))}
+        </Select>
       </div>
 
       {/* Sessions List */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {filteredSessions.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground">
-            <div className="text-4xl mb-2">💬</div>
+            <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
             <p className="text-sm">
               {sessions.length === 0 ? 'No chat sessions yet' : 'No chats match your filters'}
             </p>
           </div>
         ) : (
-          <div className="p-2 space-y-1">
+          <div className="p-2 space-y-0.5">
             {filteredSessions.map(session => (
               <div
                 key={session.id}
                 onClick={() => editingSessionId !== session.id && onSessionSelect(session)}
-                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`group relative px-3 py-2.5 rounded-lg cursor-pointer transition-colors ${
                   selectedSessionId === session.id
-                    ? 'bg-primary/10 border border-primary/20'
+                    ? 'bg-primary/10 ring-1 ring-inset ring-primary/15'
                     : 'hover:bg-muted'
                 }`}
               >
@@ -265,9 +258,9 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
                           className="text-sm h-7"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') {
-                              handleSaveRename(session.id, e as any)
+                              handleSaveRename(session.id, e)
                             } else if (e.key === 'Escape') {
-                              handleCancelRename(e as any)
+                              handleCancelRename(e)
                             }
                           }}
                           autoFocus
@@ -296,14 +289,14 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
                         <h3 className="font-medium text-sm truncate">
                           {session.title}
                         </h3>
-                        {session.project_id && (
-                          <p className="text-xs text-muted-foreground truncate mt-1">
-                            📚 {getProjectName(session.project_id)}
-                          </p>
-                        )}
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatDate(session.updated_at)}
-                        </p>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
+                          {session.project_id && (
+                            <span className="truncate">{getProjectName(session.project_id)}</span>
+                          )}
+                          <span className={session.project_id ? 'ml-auto flex-shrink-0' : ''}>
+                            {formatDate(session.updated_at)}
+                          </span>
+                        </div>
                       </>
                     )}
                   </div>
@@ -314,19 +307,22 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
                         variant="ghost"
                         size="sm"
                         onClick={(e) => handleStartRename(session, e)}
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        className="md:opacity-0 md:group-hover:opacity-100 h-8 w-8 md:h-6 md:w-6 p-0 text-muted-foreground hover:text-foreground"
                         title="Rename chat"
                       >
-                        ✏️
+                        <Pencil className="h-3 w-3" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={(e) => handleDeleteSession(session.id, e)}
-                        className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSessionToDelete(session.id)
+                        }}
+                        className="md:opacity-0 md:group-hover:opacity-100 h-8 w-8 md:h-6 md:w-6 p-0 text-muted-foreground hover:text-destructive"
                         title="Delete chat"
                       >
-                        ×
+                        <X className="h-3 w-3" />
                       </Button>
                     </div>
                   )}
@@ -338,7 +334,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
       </div>
 
       {/* Footer Stats */}
-      <div className="p-4 border-t text-xs text-muted-foreground space-y-2">
+      <div className="px-4 py-3 border-t text-xs text-muted-foreground space-y-2">
         <div className="flex justify-between">
           <span>{sessions.length} total chats</span>
           <span>{sessions.filter(s => s.project_id).length} project chats</span>
@@ -347,7 +343,7 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleClearEmptyChats}
+            onClick={() => setConfirmClearOpen(true)}
             disabled={clearingEmpty}
             className="w-full h-7 text-xs text-muted-foreground hover:text-destructive"
           >
@@ -355,6 +351,30 @@ export function ChatSidebar({ selectedSessionId, onSessionSelect, onNewChat, ref
           </Button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={sessionToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setSessionToDelete(null)
+        }}
+        title="Delete this chat session?"
+        description="This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (sessionToDelete) handleDeleteSession(sessionToDelete)
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmClearOpen}
+        onOpenChange={setConfirmClearOpen}
+        title={`Delete ${emptySessionCount} empty chat${emptySessionCount === 1 ? '' : 's'}?`}
+        description='Empty "New Chat" sessions with no messages will be removed. This cannot be undone.'
+        confirmLabel="Clear"
+        destructive
+        onConfirm={handleClearEmptyChats}
+      />
     </div>
   )
 }

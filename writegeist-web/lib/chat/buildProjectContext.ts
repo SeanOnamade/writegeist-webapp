@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { loadChapterRowContent } from '@/lib/data/chapters'
 import { searchProjectEmbeddings, type EmbeddingSearchResult } from '@/lib/embeddings/searchProject'
 import { hasProjectEmbeddings, indexProjectEmbeddings } from '@/lib/embeddings/indexProject'
 import {
@@ -32,25 +33,6 @@ export interface BuildProjectContextResult {
 const OPENING_EXCERPT_CHARS = 2500
 
 const MAX_CONTEXT_LENGTH = 12000
-
-async function loadChapterContent(
-  supabase: Awaited<ReturnType<typeof createServiceRoleClient>>,
-  chapter: { content: string; content_file_path: string | null }
-): Promise<string> {
-  let content = chapter.content || ''
-
-  if (!content && chapter.content_file_path) {
-    const { data: storageData, error } = await supabase.storage
-      .from('chapter-content')
-      .download(chapter.content_file_path)
-
-    if (!error && storageData) {
-      content = await storageData.text()
-    }
-  }
-
-  return content
-}
 
 function truncateContext(context: string): string {
   if (context.length <= MAX_CONTEXT_LENGTH) return context
@@ -155,20 +137,40 @@ export async function buildProjectContext(
     .eq('user_id', userId)
     .single()
 
-  const projectTitle = project?.title || 'Untitled Project'
+  // Ownership gate: never build context (or run embedding search) for a
+  // project that doesn't exist or belongs to another user.
+  if (!project) {
+    return {
+      context: '',
+      projectTitle: 'Untitled Project',
+      citations: [],
+      indexed: false,
+      indexing: false,
+      hasContent: false,
+      confidence: 'low',
+      isSummary: false,
+      isThematic: false,
+      isSpeculative: false,
+    }
+  }
+
+  const projectTitle = project.title || 'Untitled Project'
   let context = `Project: ${projectTitle}\n`
   if (project?.description) {
     context += `Description: ${project.description}\n`
   }
 
-  let indexed = await hasProjectEmbeddings(projectId, userId)
+  const indexed = await hasProjectEmbeddings(projectId, userId)
   let indexing = false
 
   if (!indexed) {
+    // Indexing normally happens on chapter save; this backfills older projects
+    // without blocking the request. This response falls back to raw chapter
+    // excerpts; the next one uses embeddings.
     indexing = true
-    const indexResult = await indexProjectEmbeddings(projectId, userId)
-    indexed = indexResult.indexed
-    indexing = false
+    void indexProjectEmbeddings(projectId, userId).catch((error) =>
+      console.error('Background project indexing failed:', error)
+    )
   }
 
   const { data: chapters } = await supabase
@@ -178,26 +180,15 @@ export async function buildProjectContext(
     .eq('user_id', userId)
     .order('order_index', { ascending: true })
 
-  const chaptersWithContent: Array<{
-    id: string
-    order_index: number
-    title: string
-    content: string
-  }> = []
-
-  if (chapters) {
-    for (const chapter of chapters) {
-      const content = await loadChapterContent(supabase, chapter)
-      if (content) {
-        chaptersWithContent.push({
-          id: chapter.id,
-          order_index: chapter.order_index,
-          title: chapter.title,
-          content,
-        })
-      }
-    }
-  }
+  const loaded = await Promise.all(
+    (chapters ?? []).map(async (chapter) => ({
+      id: chapter.id,
+      order_index: chapter.order_index,
+      title: chapter.title,
+      content: await loadChapterRowContent(supabase, chapter),
+    }))
+  )
+  const chaptersWithContent = loaded.filter((chapter) => chapter.content)
 
   const citations: ContextCitation[] = []
   let searchResults: EmbeddingSearchResult[] = []

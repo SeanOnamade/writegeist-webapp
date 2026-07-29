@@ -47,10 +47,10 @@ export function CreateProjectDialog({ isOpen, onClose, onProjectCreated }: Creat
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background border rounded-lg p-6 w-full max-w-md mx-4">
+      <div className="bg-background border rounded-lg p-6 w-full max-w-md mx-4 max-h-[85dvh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Create New Project</h2>
-          <Button variant="ghost" size="sm" onClick={handleClose} className="h-8 w-8 p-0">
+          <Button variant="ghost" size="sm" onClick={handleClose} className="h-9 w-9 p-0">
             ✕
           </Button>
         </div>

@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-openai
-python-dotenv
-langchain-openai
-langgraph
-pydantic
-pytest
-requests

@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { auth } from '@/lib/supabase/auth'
-import { api } from '@/lib/api/client'
+import { supabase } from '@/lib/supabase/client'
+import { getCurrentUserProfile, updateUserProfile } from '@/lib/data/users'
 import type { User } from '@supabase/supabase-js'
 import type { User as DBUser } from '@/types/database'
 
@@ -52,12 +53,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const loadProfile = async () => {
     try {
       setError(null)
-      const result = await api.getCurrentUser()
-      
-      if (result.success && result.data) {
-        setProfile(result.data)
-      } else if (result.error) {
-        setError(result.error)
+      const profileData = await getCurrentUserProfile(supabase)
+      if (profileData) {
+        setProfile(profileData)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profile')
@@ -75,13 +73,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const updateProfile = async (updates: Partial<DBUser>): Promise<boolean> => {
     try {
       setError(null)
-      const result = await api.updateUserProfile(updates)
-      
-      if (result.success && result.data) {
-        setProfile(result.data)
+      const updated = await updateUserProfile(supabase, updates)
+
+      if (updated) {
+        setProfile(updated)
         return true
       } else {
-        setError(result.error || 'Failed to update profile')
+        setError('Failed to update profile')
         return false
       }
     } catch (err) {

@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Pencil, Trash2, Loader2 } from 'lucide-react'
 import type { Idea } from '@/types/database'
 import { ideasAPI } from '@/lib/api/ideas'
 
@@ -20,6 +23,7 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
   const [newTag, setNewTag] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
 
   const handleSave = async () => {
@@ -44,10 +48,6 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this idea? This action cannot be undone.')) {
-      return
-    }
-
     setDeleting(true)
     try {
       const success = await ideasAPI.delete(idea.id)
@@ -122,11 +122,10 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'new': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'used': return 'bg-green-100 text-green-800 border-green-200'
-      case 'archived': return 'bg-gray-100 text-gray-800 border-gray-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'new': return 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/20'
+      case 'in_progress': return 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/20'
+      case 'used': return 'bg-green-500/15 text-green-700 dark:text-green-300 border-green-500/20'
+      default: return 'bg-muted text-muted-foreground border-border'
     }
   }
 
@@ -148,11 +147,11 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
             placeholder="Idea title"
             className="font-semibold"
           />
-          <textarea
+          <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Describe your idea..."
-            className="w-full p-3 border border-input rounded-md bg-background resize-none"
+            className="resize-none"
             rows={4}
           />
           <div className="flex justify-end space-x-2">
@@ -185,7 +184,7 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
               <select
                 value={idea.status}
                 onChange={(e) => handleStatusChange(e.target.value as Idea['status'])}
-                className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(idea.status)}`}
+                className={`px-2 py-1 text-xs font-medium rounded-full border cursor-pointer ${getStatusColor(idea.status)}`}
               >
                 <option value="new">New</option>
                 <option value="in_progress">In Progress</option>
@@ -199,16 +198,18 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
                   onClick={() => setIsEditing(true)}
                   className="h-8 w-8 p-0"
                 >
-                  ✏️
+                  <Pencil className="h-4 w-4" />
+                  <span className="sr-only">Edit idea</span>
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={handleDelete}
+                  onClick={() => setConfirmDeleteOpen(true)}
                   disabled={deleting}
                   className="h-8 w-8 p-0 text-destructive hover:text-destructive"
                 >
-                  {deleting ? '⏳' : '🗑️'}
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <span className="sr-only">Delete idea</span>
                 </Button>
               </div>
             </div>
@@ -304,6 +305,16 @@ export function IdeaCard({ idea, onUpdate, onDelete, onView }: IdeaCardProps) {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteOpen}
+        onOpenChange={setConfirmDeleteOpen}
+        title="Delete this idea?"
+        description="This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

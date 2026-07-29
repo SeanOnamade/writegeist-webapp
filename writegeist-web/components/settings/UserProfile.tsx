@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { api } from '@/lib/api/client'
+import { supabase } from '@/lib/supabase/client'
+import { getCurrentUserProfile, updateUserProfile } from '@/lib/data/users'
 import type { User } from '@/types/database'
 
 export function UserProfile() {
@@ -20,10 +21,10 @@ export function UserProfile() {
 
   const loadUser = async () => {
     try {
-      const result = await api.getCurrentUser()
-      if (result.success && result.data) {
-        setUser(result.data)
-        setFullName(result.data.full_name || '')
+      const profile = await getCurrentUserProfile(supabase)
+      if (profile) {
+        setUser(profile)
+        setFullName(profile.full_name || '')
       }
     } catch (error) {
       console.error('Error loading user:', error)
@@ -39,19 +40,15 @@ export function UserProfile() {
     setMessage('')
 
     try {
-
-
-
-      // Update user profile
-      const result = await api.updateUserProfile({
+      const updated = await updateUserProfile(supabase, {
         full_name: fullName || null
       })
 
-      if (result.success) {
+      if (updated) {
         setMessage('Profile updated successfully!')
-        setUser(result.data || user)
+        setUser(updated)
       } else {
-        setMessage('Failed to update profile: ' + (result.error || 'Unknown error'))
+        setMessage('Failed to update profile')
       }
     } catch (error) {
       setMessage('Error updating profile: ' + (error instanceof Error ? error.message : 'Unknown error'))

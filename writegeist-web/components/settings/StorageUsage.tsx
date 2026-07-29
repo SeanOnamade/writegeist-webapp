@@ -3,12 +3,8 @@
 import { useState, useEffect } from 'react'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
-import { api } from '@/lib/api/client'
-
-interface StorageData {
-  byBucket: Record<string, { count: number; size: number }>
-  total: { count: number; size: number }
-}
+import { supabase } from '@/lib/supabase/client'
+import { getStorageUsage, type StorageUsage as StorageData } from '@/lib/data/storage'
 
 const BUCKET_LABELS = {
   'audio-files': 'Audio Files',
@@ -37,11 +33,11 @@ export function StorageUsage() {
     setError(null)
     
     try {
-      const result = await api.getStorageUsage()
-      if (result.success && result.data) {
-        setStorageData(result.data)
+      const usage = await getStorageUsage(supabase)
+      if (usage) {
+        setStorageData(usage)
       } else {
-        setError(result.error || 'Failed to load storage usage')
+        setError('Failed to load storage usage')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error')

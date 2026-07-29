@@ -1,125 +1,113 @@
-'use client'
-
-import { useEffect, useState } from 'react'
-import { Button } from '@/components/ui/button'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { useUser } from '@/contexts/UserContext'
+import {
+  BookOpen,
+  Bot,
+  Search,
+  Volume2,
+  Cloud,
+  BarChart3,
+  type LucideIcon,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { MarketingHeader } from '@/components/layout/MarketingHeader'
+import { createClient } from '@/lib/supabase/server'
 
-function AuthenticatedHome() {
-  // Redirect authenticated users to projects
-  useEffect(() => {
-    window.location.href = '/project'
-  }, [])
+const FEATURES: Array<{ icon: LucideIcon; title: string; description: string }> = [
+  {
+    icon: BookOpen,
+    title: 'Project Management',
+    description:
+      'Organize your books, novels, and writing projects with chapter management and progress tracking.',
+  },
+  {
+    icon: Bot,
+    title: 'AI Writing Assistant',
+    description:
+      'Ask questions about your characters, plot, and events — answered from your actual chapters.',
+  },
+  {
+    icon: Search,
+    title: 'Smart Search',
+    description:
+      'Vector-powered search through your manuscript, idea management, and story analysis.',
+  },
+  {
+    icon: Volume2,
+    title: 'Audio Narration',
+    description:
+      'Generate high-quality audio narration of your chapters with text-to-speech.',
+  },
+  {
+    icon: Cloud,
+    title: 'Cloud Sync',
+    description: 'Access your work from anywhere — everything is saved to the cloud as you write.',
+  },
+  {
+    icon: BarChart3,
+    title: 'Writing Analytics',
+    description: 'Track word counts and progress across projects to stay motivated.',
+  },
+]
 
-  return (
-    <div className="min-h-screen bg-background flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-        <p className="text-muted-foreground">Redirecting to your projects...</p>
-      </div>
-    </div>
-  )
-}
+export default async function Home() {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-function UnauthenticatedHome() {
+  if (user) {
+    redirect('/project')
+  }
+
   return (
     <div className="min-h-screen bg-background">
-      <main className="container mx-auto px-4 py-16">
+      <MarketingHeader />
+      <main className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-            Writegeist
+          <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            AI-powered writing studio
+          </span>
+          <h1 className="mt-6 text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
+            Write your book.
+            <br />
+            <span className="text-primary">Writegeist handles the rest.</span>
           </h1>
-          <p className="mt-6 text-lg leading-8 text-muted-foreground">
-            AI-powered writing assistant for managing your books, chapters, and creative projects.
-            Cloud-native web application with real-time collaboration and intelligent writing tools.
+          <p className="mt-6 text-lg leading-8 text-muted-foreground max-w-2xl mx-auto">
+            Manage your books, chapters, and creative projects — with an AI assistant that answers
+            questions from your own manuscript.
           </p>
-          
-          <div className="mt-10 flex items-center justify-center gap-x-6">
+
+          <div className="mt-10 flex items-center justify-center gap-x-4">
             <Button asChild size="lg">
-              <Link href="/login">Sign In</Link>
+              <Link href="/signup">Start writing free</Link>
             </Button>
             <Button variant="outline" size="lg" asChild>
-              <Link href="/signup">Create Account</Link>
+              <Link href="/login">Sign in</Link>
             </Button>
           </div>
-          
-          <div className="mt-16">
-            <h2 className="text-2xl font-semibold mb-8">Features</h2>
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">📚</div>
-                <h3 className="font-semibold mb-2">Project Management</h3>
-                <p className="text-sm text-muted-foreground">
-                  Organize your books, novels, and writing projects with intelligent chapter management and progress tracking.
-                </p>
-              </div>
-              
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">🤖</div>
-                <h3 className="font-semibold mb-2">AI Writing Assistant</h3>
-                <p className="text-sm text-muted-foreground">
-                  Get contextual help with character development, plot consistency, and writing suggestions powered by AI.
-                </p>
-              </div>
-              
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">🎯</div>
-                <h3 className="font-semibold mb-2">Smart Insights</h3>
-                <p className="text-sm text-muted-foreground">
-                  Vector-powered search through your content, idea management, and intelligent story analysis.
-                </p>
-              </div>
-              
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">🔊</div>
-                <h3 className="font-semibold mb-2">Audio Narration</h3>
-                <p className="text-sm text-muted-foreground">
-                  Generate high-quality audio narration of your chapters with text-to-speech technology.
-                </p>
-              </div>
-              
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">☁️</div>
-                <h3 className="font-semibold mb-2">Cloud Sync</h3>
-                <p className="text-sm text-muted-foreground">
-                  Access your work from anywhere with real-time synchronization and collaborative features.
-                </p>
-              </div>
-              
-              <div className="border rounded-lg p-6">
-                <div className="text-3xl mb-4">📊</div>
-                <h3 className="font-semibold mb-2">Writing Analytics</h3>
-                <p className="text-sm text-muted-foreground">
-                  Track your writing progress, word counts, and productivity metrics to stay motivated.
-                </p>
-              </div>
+
+          <div className="mt-20">
+            <h2 className="text-2xl font-semibold tracking-tight mb-8">
+              Everything your manuscript needs
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {FEATURES.map(({ icon: Icon, title, description }) => (
+                <div
+                  key={title}
+                  className="bg-card border rounded-lg p-5 text-left shadow-sm transition-all hover:shadow-md hover:border-primary/40"
+                >
+                  <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="font-semibold mb-1">{title}</h3>
+                  <p className="text-sm text-muted-foreground">{description}</p>
+                </div>
+              ))}
             </div>
-          </div>
-          
-          <div className="mt-16 text-center">
-            <p className="text-sm text-muted-foreground">
-              Start your writing journey today. Create an account to access all features.
-            </p>
           </div>
         </div>
       </main>
     </div>
   )
-}
-
-export default function Home() {
-  const { user, loading } = useUser()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  return user ? <AuthenticatedHome /> : <UnauthenticatedHome />
 }

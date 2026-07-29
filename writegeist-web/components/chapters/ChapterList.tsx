@@ -5,6 +5,10 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { StatusBadge } from '@/components/ui/status-badge'
+import { EmptyState } from '@/components/ui/empty-state'
+import { FileText } from 'lucide-react'
 import type { Chapter } from '@/types/database'
 import { chaptersAPI } from '@/lib/api/chapters'
 
@@ -29,6 +33,7 @@ export function ChapterList({
   const [creating, setCreating] = useState(false)
   const [newChapterTitle, setNewChapterTitle] = useState('')
   const [draggedChapter, setDraggedChapter] = useState<string | null>(null)
+  const [chapterToDelete, setChapterToDelete] = useState<Chapter | null>(null)
 
   const handleCreateChapter = async () => {
     if (!newChapterTitle.trim()) return
@@ -61,10 +66,6 @@ export function ChapterList({
   }
 
   const handleDeleteChapter = async (chapter: Chapter) => {
-    if (!confirm(`Are you sure you want to delete "${chapter.title}"? This action cannot be undone.`)) {
-      return
-    }
-
     try {
       const success = await chaptersAPI.delete(chapter.id)
       if (success) {
@@ -121,16 +122,6 @@ export function ChapterList({
     setDraggedChapter(null)
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800 border-green-200'
-      case 'in_progress': return 'bg-blue-100 text-blue-800 border-blue-200'
-      case 'published': return 'bg-purple-100 text-purple-800 border-purple-200'
-      case 'draft': return 'bg-gray-100 text-gray-800 border-gray-200'
-      default: return 'bg-gray-100 text-gray-800 border-gray-200'
-    }
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -166,13 +157,11 @@ export function ChapterList({
 
       {/* Chapter List */}
       {chapters.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📝</div>
-          <h3 className="text-lg font-medium mb-2">No chapters yet</h3>
-          <p className="text-muted-foreground">
-            Create your first chapter to start writing
-          </p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No chapters yet"
+          description="Create your first chapter to start writing"
+        />
       ) : (
         <div className="space-y-2">
           {chapters
@@ -196,9 +185,7 @@ export function ChapterList({
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mb-2">
                         <h3 className="font-semibold truncate">{chapter.title}</h3>
-                        <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getStatusColor(chapter.status)} flex-shrink-0`}>
-                          {chapter.status.replace('_', ' ')}
-                        </span>
+                        <StatusBadge status={chapter.status} className="flex-shrink-0" />
                       </div>
                       <div className="flex flex-col sm:flex-row gap-1 sm:gap-4 text-sm text-muted-foreground">
                         <span className="flex-shrink-0">{(chapter.word_count || 0).toLocaleString()} words</span>
@@ -216,7 +203,7 @@ export function ChapterList({
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDeleteChapter(chapter)}
+                      onClick={() => setChapterToDelete(chapter)}
                       className="text-destructive hover:text-destructive flex-1 sm:flex-initial"
                     >
                       Delete
@@ -233,6 +220,20 @@ export function ChapterList({
           Drag and drop chapters to reorder them
         </div>
       )}
+
+      <ConfirmDialog
+        open={chapterToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) setChapterToDelete(null)
+        }}
+        title={`Delete "${chapterToDelete?.title}"?`}
+        description="This action cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => {
+          if (chapterToDelete) handleDeleteChapter(chapterToDelete)
+        }}
+      />
     </div>
   )
 }

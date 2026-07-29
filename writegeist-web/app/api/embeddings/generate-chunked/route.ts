@@ -1,46 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+import { requireUser } from '@/lib/supabase/server'
+import { jsonError, parseBody } from '@/lib/api/http'
 import { indexChapterEmbeddings } from '@/lib/embeddings/indexProject'
+
+const bodySchema = z.object({
+  chapterId: z.string().min(1),
+  content: z.string().min(1),
+  projectId: z.string().min(1).optional(),
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const { chapterId, content, projectId } = await request.json()
-
-    if (!chapterId || !content) {
-      return NextResponse.json({ error: 'chapterId and content are required' }, { status: 400 })
+    const { supabase, user } = await requireUser()
+    if (!user) {
+      return jsonError('Not authenticated', 401)
     }
 
-    const supabase = await createClient()
+    const body = await parseBody(request, bodySchema)
+    if (!body.ok) return body.response
+    const { chapterId, content, projectId } = body.data
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: 'User not authenticated' }, { status: 401 })
-    }
+    // Resolve the project and title from the chapter row (RLS scopes to user).
+    const { data: chapter } = await supabase
+      .from('chapters')
+      .select('project_id, title')
+      .eq('id', chapterId)
+      .single()
 
-    let resolvedProjectId = projectId
-    let chapterTitle = 'Untitled Chapter'
+    const resolvedProjectId = projectId ?? chapter?.project_id
+    const chapterTitle = chapter?.title || 'Untitled Chapter'
 
-    if (!resolvedProjectId) {
-      const { data: chapter } = await supabase
-        .from('chapters')
-        .select('project_id, title')
-        .eq('id', chapterId)
-        .single()
-
-      resolvedProjectId = chapter?.project_id
-      chapterTitle = chapter?.title || chapterTitle
-    } else {
-      const { data: chapter } = await supabase
-        .from('chapters')
-        .select('title')
-        .eq('id', chapterId)
-        .single()
-
-      if (chapter?.title) chapterTitle = chapter.title
-    }
-
-    if (!resolvedProjectId) {
-      return NextResponse.json({ error: 'Project ID could not be resolved' }, { status: 400 })
+    if (!chapter || !resolvedProjectId) {
+      return jsonError('Chapter not found', 404)
     }
 
     const result = await indexChapterEmbeddings(
@@ -58,6 +50,6 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error('Chunked embedding generation error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return jsonError('Internal server error', 500)
   }
 }

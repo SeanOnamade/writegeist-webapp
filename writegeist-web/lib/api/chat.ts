@@ -1,29 +1,29 @@
+// Browser-side adapter over lib/data/chat (uses the singleton client).
+
+import { supabase } from '@/lib/supabase/client'
+import * as data from '@/lib/data/chat'
 import type { ChatSession, ChatMessage, Json } from '@/types/database'
-import { chatOperations } from '@/lib/database/operations'
 
 export const chatAPI = {
-  async getSessions(): Promise<ChatSession[]> {
-    return await chatOperations.getSessions()
+  getSessions(): Promise<ChatSession[]> {
+    return data.getSessions(supabase)
   },
 
-  async createSession(title: string, projectId?: string): Promise<ChatSession | null> {
-    return await chatOperations.createSession({
-      title,
-      project_id: projectId || null,
-    })
+  createSession(title: string, projectId?: string): Promise<ChatSession | null> {
+    return data.createSession(supabase, { title, project_id: projectId || null })
   },
 
-  async getMessages(sessionId: string): Promise<ChatMessage[]> {
-    return await chatOperations.getMessages(sessionId)
+  getMessages(sessionId: string): Promise<ChatMessage[]> {
+    return data.getMessages(supabase, sessionId)
   },
 
-  async sendMessage(
+  sendMessage(
     sessionId: string,
     content: string,
     role: 'user' | 'assistant' = 'user',
     metadata?: Json
   ): Promise<ChatMessage | null> {
-    return await chatOperations.addMessage({
+    return data.addMessage(supabase, {
       session_id: sessionId,
       content,
       role,
@@ -31,25 +31,23 @@ export const chatAPI = {
     })
   },
 
-  async deleteSession(sessionId: string): Promise<boolean> {
-    return await chatOperations.deleteSession(sessionId)
+  deleteSession(sessionId: string): Promise<boolean> {
+    return data.deleteSession(supabase, sessionId)
   },
 
   async updateSessionTitle(sessionId: string, title: string): Promise<boolean> {
-    const result = await chatOperations.updateSession(sessionId, { title })
-    return !!result
+    return (await data.updateSession(supabase, sessionId, { title })) !== null
   },
 
   async updateSessionProject(sessionId: string, projectId: string): Promise<boolean> {
-    const result = await chatOperations.updateSession(sessionId, { project_id: projectId })
-    return !!result
+    return (await data.updateSession(supabase, sessionId, { project_id: projectId })) !== null
   },
 
-  async countEmptySessions(): Promise<number> {
-    return await chatOperations.countEmptySessions()
+  countEmptySessions(): Promise<number> {
+    return data.countEmptySessions(supabase)
   },
 
-  async deleteEmptySessions(): Promise<number> {
-    return await chatOperations.deleteEmptySessions()
+  deleteEmptySessions(): Promise<number> {
+    return data.deleteEmptySessions(supabase)
   },
 }

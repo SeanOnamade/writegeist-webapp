@@ -1,79 +1,62 @@
-import type { Chapter } from '@/types/database'
-import { api } from './client'
+// Browser-side adapter over lib/data/chapters (uses the singleton client).
+// Server components should import lib/data/chapters directly with a server client.
+
+import { supabase } from '@/lib/supabase/client'
+import * as data from '@/lib/data/chapters'
+import { chapterContentStorage } from '@/lib/storage/chapterContent'
+import type { Chapter, ChapterInsert } from '@/types/database'
 
 export const chaptersAPI = {
-  async getAll(projectId: string): Promise<Chapter[]> {
-    const result = await api.getChaptersByProject(projectId)
-    return result.data || []
+  getAll(projectId: string): Promise<Chapter[]> {
+    return data.getChaptersByProject(supabase, projectId)
   },
 
-  async getById(id: string): Promise<Chapter | null> {
-    const result = await api.getChapter(id)
-    return result.data || null
+  getById(id: string): Promise<Chapter | null> {
+    return data.getChapter(supabase, id)
   },
 
+  /**
+   * Create or update a chapter. Content updates are stored in the
+   * chapter-content bucket and trigger chunked embedding regeneration.
+   */
   async save(chapter: Partial<Chapter>): Promise<Chapter | null> {
-    let savedChapter: Chapter | null = null
-    
-    if (chapter.id) {
-      const result = await api.updateChapter(chapter.id, chapter)
-      savedChapter = result.data || null
-    } else {
-      const result = await api.createChapter(chapter as any)
-      savedChapter = result.data || null
+    if (!chapter.id) {
+      return data.createChapter(supabase, chapter as Omit<ChapterInsert, 'user_id'>)
     }
-    
-    // Skip regular embedding generation - chunked embeddings are handled by storage system
-    // The storage system now handles chunked embeddings which are superior to single embeddings
-    console.log('Skipping regular embedding generation - using chunked embeddings from storage system')
-    
-    return savedChapter
-  },
 
-  async generateEmbeddings(chapterId: string): Promise<boolean> {
-    try {
-      const chapter = await this.getById(chapterId)
-      if (!chapter || !chapter.content || chapter.content.length < 50) {
-        return false
+    if (chapter.content !== undefined) {
+      const wordCount = chapter.content
+        .trim()
+        .split(/\s+/)
+        .filter((word) => word.length > 0).length
+
+      let projectId = chapter.project_id
+      if (!projectId) {
+        const { data: row } = await supabase
+          .from('chapters')
+          .select('project_id')
+          .eq('id', chapter.id)
+          .single()
+        projectId = row?.project_id
       }
 
-      const response = await fetch('/api/embeddings/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chapterId: chapter.id,
-          content: chapter.content,
-          projectId: chapter.project_id
-        })
+      return chapterContentStorage.saveChapterContent(chapter.id, chapter.content, {
+        title: chapter.title,
+        status: chapter.status,
+        wordCount,
+        orderIndex: chapter.order_index,
+        projectId,
       })
-
-      return response.ok
-    } catch (error) {
-      console.error('Error generating embeddings:', error)
-      return false
     }
+
+    return data.updateChapterMeta(supabase, chapter.id, chapter)
   },
 
-  async delete(id: string): Promise<boolean> {
-    const result = await api.deleteChapter(id)
-    return result.success
+  delete(id: string): Promise<boolean> {
+    return data.deleteChapter(supabase, id)
   },
 
-  async reorder(projectId: string, chapterIds: string[]): Promise<boolean> {
-    const result = await api.reorderChapters(projectId, chapterIds)
-    return result.success
+  reorder(projectId: string, chapterIds: string[]): Promise<boolean> {
+    return data.reorderChapters(supabase, projectId, chapterIds)
   },
-
-  // Legacy method for compatibility with existing components
-  async analyze(title: string, _text: string): Promise<Record<string, unknown>> {
-    // TODO: Integrate with OpenAI API for chapter analysis
-    console.log('Chapter analysis requested for:', title)
-    return {
-      characters: [],
-      locations: [],
-      pov: ['Third Person'],
-      summary: 'Analysis not yet implemented',
-      tropes: []
-    }
-  }
 }
